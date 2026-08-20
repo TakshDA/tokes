@@ -275,14 +275,6 @@ async function dataDelete(id){
   DATA = DATA.filter(x=>x.id!==id); await localSave(DATA);
 }
 
-function seed(){return [
-  {id:uid(),shift_date:"2026-08-12",boxes:[400],hours:11,tourney_hours:0,received:true},
-  {id:uid(),shift_date:"2026-08-13",boxes:[27,20,23,19,100,41,67,28],tourney_hours:0,received:true},
-  {id:uid(),shift_date:"2026-08-14",boxes:[15,88,21,44,57,25,107,106,47],tourney_hours:0,received:true},
-  {id:uid(),shift_date:"2026-08-16",boxes:[35,30,30,55,30,95,95,20],tourney_hours:3.5,received:true},
-  {id:uid(),shift_date:"2026-08-17",boxes:[125,37,47,45,35,44,27],tourney_hours:0,received:true},
-];}
-
 let DATA = [];
 let editing = null;
 let openId = null;
@@ -336,7 +328,6 @@ async function enterApp(){
     ? `<span class="cloudbadge">synced to your account</span>`
     : `saved on this device only`;
   let d = await dataList();
-  if(!CLOUD && !d){ d = seed(); await localSave(d); }
   DATA = d || [];
   DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
   renderAll();
@@ -344,7 +335,7 @@ async function enterApp(){
 
 $("#signout").onclick = async ()=>{
   if(CLOUD){ await sb.auth.signOut(); }
-  else { DATA = seed(); await localSave(DATA); renderAll(); }
+  else { DATA = []; await localSave(DATA); renderAll(); }
 };
 
 function renderHero(){
@@ -440,9 +431,7 @@ async function commit(){
 function renderList(){
   const m=$("#listMount");
   if(!DATA.length){
-    m.innerHTML=`<div class="empty"><b>No nights yet</b>Tap "Log a night" to start, or bring in your Aug 12-17 nights below.
-      ${CLOUD?`<button class="add-cta" id="importB" style="margin-top:18px">Import my Aug 12-17 nights</button>`:``}</div>`;
-    const ib=$("#importB"); if(ib) ib.onclick=importStarter;
+    m.innerHTML=`<div class="empty"><b>No nights yet</b>Tap "Log a night" to log your first shift.</div>`;
     return;
   }
   m.innerHTML = `<div class="sec">Your nights</div>` + DATA.map(receiptHTML).join("");
@@ -451,13 +440,6 @@ function renderList(){
   });
   m.querySelectorAll(".r-edit").forEach(b=>b.onclick=ev=>{ev.stopPropagation();openEditor(DATA.find(x=>x.id===b.dataset.id));window.scrollTo({top:0,behavior:"smooth"});});
   m.querySelectorAll(".r-del").forEach(b=>b.onclick=async ev=>{ev.stopPropagation();await dataDelete(b.dataset.id);if(CLOUD)DATA=(await dataList())||[];DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));renderAll();});
-}
-async function importStarter(){
-  const b=$("#importB"); if(b){ b.disabled=true; b.textContent="Importing..."; }
-  for(const night of seed()){ await dataUpsert(Object.assign({}, night, {_new:true})); }
-  DATA = (await dataList())||[];
-  DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
-  renderAll();
 }
 function receiptHTML(s){
   const c=calc(s), open=openId===s.id;
