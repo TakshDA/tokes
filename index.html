@@ -477,13 +477,25 @@ async function commit(){
    ========================================================= */
 function renderList(){
   const m=$("#listMount");
-  if(!DATA.length){ m.innerHTML=`<div class="empty"><b>No nights yet</b>Tap “Log a night”, drop in each box, and it prints your receipt with the $30 floor already worked in.</div>`; return; }
+  if(!DATA.length){
+    m.innerHTML=`<div class="empty"><b>No nights yet</b>Tap “Log a night” to start, or bring in your Aug 12–17 nights below.
+      ${CLOUD?`<button class="add-cta" id="importB" style="margin-top:18px">Import my Aug 12–17 nights</button>`:``}</div>`;
+    const ib=$("#importB"); if(ib) ib.onclick=importStarter;
+    return;
+  }
   m.innerHTML = `<div class="sec">Your nights</div>` + DATA.map(receiptHTML).join("");
   m.querySelectorAll(".receipt").forEach(el=>{
     el.onclick=ev=>{ if(ev.target.closest("button"))return; const id=el.dataset.id; openId=(openId===id)?null:id; renderList(); };
   });
   m.querySelectorAll(".r-edit").forEach(b=>b.onclick=ev=>{ev.stopPropagation();openEditor(DATA.find(x=>x.id===b.dataset.id));window.scrollTo({top:0,behavior:"smooth"});});
   m.querySelectorAll(".r-del").forEach(b=>b.onclick=async ev=>{ev.stopPropagation();await dataDelete(b.dataset.id);if(CLOUD)DATA=(await dataList())||[];DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));renderAll();});
+}
+async function importStarter(){
+  const b=$("#importB"); if(b){ b.disabled=true; b.textContent="Importing…"; }
+  for(const night of seed()){ await dataUpsert(Object.assign({}, night, {_new:true})); }
+  DATA = (await dataList())||[];
+  DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
+  renderAll();
 }
 function receiptHTML(s){
   const c=calc(s), open=openId===s.id;
