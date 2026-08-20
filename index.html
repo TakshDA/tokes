@@ -250,10 +250,12 @@ function calc(s){
   const topup = Math.max(0, floor - tips);
   const hourly = n ? boxPay / n : 0;
   const tHrs = Number(s.tourney_hours||0);
-  const tPay = TOURNEY_RATE * tHrs;
+  const tFlat = TOURNEY_RATE * tHrs;            // flat $30/hr tourney pay
+  const tTips = Number(s.tourney_tips||0);      // tips earned while dealing the tourney
+  const tPay = tFlat + tTips;
   const total = boxPay + tPay;
   const lump = !!(s.hours && Number(s.hours)>0 && nBox<=1);   // one amount logged over many hours
-  return {n, nBox, gross, opCharge, tips, floor, boxPay, topup, hourly, tHrs, tPay, total, lump};
+  return {n, nBox, gross, opCharge, tips, floor, boxPay, topup, hourly, tHrs, tFlat, tTips, tPay, total, lump};
 }
 
 /* =========================================================
@@ -274,7 +276,7 @@ async function dataList(){
   if (CLOUD){
     const { data, error } = await sb.from("shifts").select("*").order("shift_date",{ascending:false});
     if (error){ console.warn(error); return []; }
-    return data.map(r=>({id:r.id, shift_date:r.shift_date, boxes:r.boxes||[], hours:(r.hours!=null?Number(r.hours):null), tourney_hours:Number(r.tourney_hours||0), received:!!r.received}));
+    return data.map(r=>({id:r.id, shift_date:r.shift_date, boxes:r.boxes||[], hours:(r.hours!=null?Number(r.hours):null), tourney_hours:Number(r.tourney_hours||0), tourney_tips:Number(r.tourney_tips||0), received:!!r.received}));
   }
   try{ const r = await window.storage.get(LKEY); if(r&&r.value) return JSON.parse(r.value); }catch(e){}
   return null;
@@ -282,7 +284,7 @@ async function dataList(){
 async function localSave(arr){ try{ await window.storage.set(LKEY, JSON.stringify(arr)); }catch(e){} }
 async function dataUpsert(s){
   if (CLOUD){
-    const row = {user_id:user.id, shift_date:s.shift_date, boxes:s.boxes, hours:(s.hours||null), tourney_hours:s.tourney_hours, received:s.received};
+    const row = {user_id:user.id, shift_date:s.shift_date, boxes:s.boxes, hours:(s.hours||null), tourney_hours:s.tourney_hours, tourney_tips:(s.tourney_tips||0), received:s.received};
     if (s.id && !s._new){ await sb.from("shifts").update(row).eq("id", s.id); }
     else { await sb.from("shifts").insert(row); }
     return;
@@ -416,8 +418,7 @@ function renderEditor(){
    <div class="editor">
      <div class="erow">
        <div class="fld" style="flex:1"><label>Date</label><input id="eDate" type="date" value="${e.shift_date}"></div>
-       <div class="fld" style="width:78px"><label>Hours</label><input id="eHours" inputmode="decimal" placeholder="auto" value="${e.hours||""}"></div>
-       <div class="fld" style="width:82px"><label>Tourney</label><input id="eTny" inputmode="decimal" placeholder="0" value="${e.tourney_hours||""}"></div>
+       <div class="fld" style="width:96px"><label>Hours</label><input id="eHours" inputmode="decimal" placeholder="auto" value="${e.hours||""}"></div>
      </div>
      <div class="fld">
        <label>Tips per box &nbsp;·&nbsp; full amount, before the $5</label>
@@ -428,6 +429,11 @@ function renderEditor(){
        <p class="hint">One box per hour, so leave Hours on “auto”. Only set Hours for a lump day (one total across many hours, like $400 over 11 hrs).</p>
        <div class="boxes" id="boxes">${e.boxes.map((a,i)=>bxHTML(a,i)).join("")}</div>
      </div>
+     <div class="erow">
+       <div class="fld" style="flex:1"><label>Tourney hrs</label><input id="eTny" inputmode="decimal" placeholder="0" value="${e.tourney_hours||""}"></div>
+       <div class="fld" style="flex:1"><label>Tourney tips $</label><input id="eTnyTips" inputmode="decimal" placeholder="0" value="${e.tourney_tips||""}"></div>
+     </div>
+     <p class="hint" style="margin-top:-4px">Tourney pays $30/hr flat, plus whatever tips you make dealing it.</p>
      <label class="recv" id="recvT">
        <span class="box ${e.received?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
        <span>${e.received?"Got paid":"Not paid yet"}</span>
@@ -438,11 +444,12 @@ function renderEditor(){
        <div style="text-align:right"><div class="ph mono">${c.n?money(c.hourly):"—"}</div>
          <small>${c.n?"per hour":"add boxes for $/hr"}</small></div>
      </div>
-     <button class="save" id="saveB" ${(e.boxes.length===0 && !c.tHrs)?"disabled":""}>${e._new?"Save night":"Update night"}</button>
+     <button class="save" id="saveB" ${(e.boxes.length===0 && !c.tHrs && !c.tTips)?"disabled":""}>${e._new?"Save night":"Update night"}</button>
    </div>`;
   $("#eDate").onchange=ev=>{e.shift_date=ev.target.value;};
   $("#eHours").oninput=ev=>{e.hours=parseFloat(ev.target.value)||null; refreshPrev();};
   $("#eTny").oninput=ev=>{e.tourney_hours=parseFloat(ev.target.value)||0; refreshPrev();};
+  $("#eTnyTips").oninput=ev=>{e.tourney_tips=parseFloat(ev.target.value)||0; refreshPrev();};
   $("#tipAdd").onclick=addTips;
   $("#tipIn").addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();addTips();}});
   $("#recvT").onclick=()=>{e.received=!e.received;renderEditor();setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),40);};
@@ -461,7 +468,7 @@ function refreshPrev(){
   p.querySelector(".pt").nextElementSibling.textContent = (c.n?("net \u00b7 after "+money(c.opCharge)+" op charge"+(c.topup>0?" \u00b7 floored":"")):"take-home")+(c.tPay>0?(" \u00b7 +tourney "+money(c.tPay)):"");
   p.querySelector(".ph").textContent=c.n?money(c.hourly):"—";
   p.querySelector(".ph").nextElementSibling.textContent=c.n?"per hour":"add boxes for $/hr";
-  const sb2=$("#saveB"); if(sb2) sb2.disabled = (e.boxes.length===0 && !c.tHrs);
+  const sb2=$("#saveB"); if(sb2) sb2.disabled = (e.boxes.length===0 && !c.tHrs && !c.tTips);
 }
 async function commit(){
   const e=editing; const wasNew=e._new; delete e._new;
@@ -512,7 +519,8 @@ function receiptHTML(s){
     ${c.n?`<div class="li house"><span class="k">OP CHARGE (${c.n}\u00d7$${OP_CHARGE})</span><span class="dots"></span><span class="v">-${money(c.opCharge)}</span></div>`:``}
     <div class="li sub"><span class="k">NET TIPS</span><span class="dots"></span><span class="v">${money(c.tips)}</span></div>
     ${c.topup>0?`<div class="li house"><span class="k">HOUSE FLOOR</span><span class="dots"></span><span class="v">+${money(c.topup)}</span></div>`:``}
-    ${c.tPay>0?`<div class="li tny"><span class="k">TOURNEY (${dnum(c.tHrs)} hr)</span><span class="dots"></span><span class="v">${money(c.tPay)}</span></div>`:``}
+    ${c.tHrs>0?`<div class="li tny"><span class="k">TOURNEY (${dnum(c.tHrs)} hr)</span><span class="dots"></span><span class="v">${money(c.tFlat)}</span></div>`:``}
+    ${c.tTips>0?`<div class="li tny"><span class="k">TOURNEY TIPS</span><span class="dots"></span><span class="v">${money(c.tTips)}</span></div>`:``}
     <div class="li total"><span class="k">TOTAL</span><span class="dots"></span><span class="v">${money(c.total)}</span></div>
     ${c.n?`<div class="stamp ${c.topup>0?"floored":""}">${money(c.hourly)}/HR</div>`:``}
     <div class="rfoot">
