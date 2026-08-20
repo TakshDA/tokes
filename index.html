@@ -5,10 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <title>Tokes — count your nights</title>
 
-<!-- ============================================================= -->
-<!--  STEP 1: paste your Supabase keys here (see SETUP.md).         -->
-<!--  Until you do, the app runs in local demo mode.               -->
-<!-- ============================================================= -->
 <script>
   window.SUPABASE_URL = "https://hpmzxcmdiledwchseuro.supabase.co";
   window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwbXp4Y21kaWxlZHdjaHNldXJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNDg2NDIsImV4cCI6MjEwMjgyNDY0Mn0.5qhk2c9KwiYN6wQkpmTdTbIoN8IMMr3GQZpaaxhVRMY";
@@ -46,7 +42,6 @@
   button{font-family:inherit;cursor:pointer}
   input{font-family:inherit}
 
-  /* ---------------- AUTH ---------------- */
   #auth{min-height:88vh;display:flex;flex-direction:column;justify-content:center;max-width:400px;margin:0 auto;padding:24px 20px}
   .brand{display:flex;flex-direction:column;align-items:center;margin-bottom:26px}
   .brand .mark{font-family:"Fraunces";font-weight:700;font-size:54px;letter-spacing:-1.5px;line-height:.9;color:var(--paper)}
@@ -67,7 +62,6 @@
   .authmsg.err{color:var(--clay)} .authmsg.ok{color:var(--emerald)}
   .demo-note{margin-top:18px;padding:12px 14px;background:rgba(185,142,51,.08);border:1px solid rgba(185,142,51,.3);border-radius:11px;font-size:12.5px;color:#d8c493;line-height:1.5}
 
-  /* ---------------- APP HEADER ---------------- */
   #app{display:none}
   .topbar{display:flex;align-items:center;justify-content:space-between;margin:6px 2px 16px}
   .topbar .mk{font-family:"Fraunces";font-weight:700;font-size:24px;letter-spacing:-.5px;color:var(--paper)}
@@ -76,7 +70,6 @@
   .who span{font-size:12px;color:var(--cream-dim);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .who button{background:var(--ink-2);border:1px solid var(--line);color:var(--cream-dim);border-radius:9px;padding:7px 11px;font-size:12px;font-weight:600}
 
-  /* hero */
   .hero{background:linear-gradient(160deg,var(--ink-3),var(--ink-2));border:1px solid var(--line);border-radius:18px;padding:20px 20px 16px;position:relative;overflow:hidden}
   .hero::before{content:"";position:absolute;right:-30px;top:-30px;width:150px;height:150px;background:radial-gradient(circle,rgba(28,124,87,.16),transparent 70%)}
   .hero .lab{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--cream-dim);margin:0}
@@ -92,7 +85,6 @@
   .add-cta:active{transform:translateY(1px);filter:brightness(.96)}
   .add-cta.x{background:transparent;border:1px solid var(--line);color:var(--cream-dim);font-family:"Inter";font-weight:600}
 
-  /* ---------------- EDITOR ---------------- */
   .editor{background:var(--ink-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin:8px 0}
   .erow{display:flex;gap:10px;margin-bottom:13px}
   .erow .fld{margin-bottom:0}
@@ -103,7 +95,7 @@
   .tiprow input{flex:1}
   .plus{flex:0 0 auto;width:50px;border:none;border-radius:11px;background:var(--emerald);color:#eafff5;font-size:26px;font-weight:600;line-height:1}
   .plus:active{filter:brightness(1.1)}
-  .hint{font-size:11.5px;color:var(--on-paper-dim);color:#736e5d;margin:7px 2px 0}
+  .hint{font-size:11.5px;color:#736e5d;margin:7px 2px 0}
   .boxes{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
   .bx{display:inline-flex;align-items:center;gap:7px;background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px 6px 11px;font-family:"Space Mono";font-weight:700;font-size:13px;color:var(--cream);animation:pop .15s ease}
   @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
@@ -123,7 +115,6 @@
   .save:disabled{opacity:.4}
   .save:active:not(:disabled){transform:translateY(1px)}
 
-  /* ---------------- RECEIPTS ---------------- */
   .list{margin-top:20px;display:flex;flex-direction:column;gap:20px}
   .sec{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--cream-dim);margin:2px 2px -6px}
   .receipt{
@@ -131,6 +122,7 @@
     padding:20px 18px 16px;position:relative;
     box-shadow:0 14px 30px rgba(0,0,0,.4);
     background-image:linear-gradient(var(--paper),var(--paper));
+    cursor:pointer;
   }
   .receipt::before,.receipt::after{content:"";position:absolute;left:0;right:0;height:9px;
     background:radial-gradient(circle at 6px -1px, transparent 6px, var(--paper) 6.5px);
@@ -162,7 +154,6 @@
   .rfoot button{flex:1;border-radius:8px;padding:10px;font-size:13px;font-weight:600;border:1px solid #cabfa6}
   .r-edit{background:var(--on-paper);color:var(--paper);border:none}
   .r-del{background:none;color:var(--clay);border:1px solid rgba(180,85,63,.4)}
-  .receipt{cursor:pointer}
 
   .empty{text-align:center;color:var(--cream-dim);padding:44px 24px;line-height:1.6}
   .empty b{color:var(--cream);font-family:"Fraunces";display:block;font-size:18px;margin-bottom:7px}
@@ -175,7 +166,6 @@
 </head>
 <body>
 
-<!-- ===================== AUTH SCREEN ===================== -->
 <div id="auth">
   <div class="brand">
     <div class="mark serif">Tok<em>e</em>s</div>
@@ -187,14 +177,13 @@
       <button id="segUp">Sign up</button>
     </div>
     <div class="fld"><label>Email</label><input id="aEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com"></div>
-    <div class="fld"><label>Password</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+    <div class="fld"><label>Password</label><input id="aPass" type="password" autocomplete="current-password" placeholder="password"></div>
     <button class="btn-primary" id="aGo">Log in</button>
     <div class="authmsg" id="aMsg"></div>
     <div id="demoWrap"></div>
   </div>
 </div>
 
-<!-- ===================== APP SCREEN ===================== -->
 <div id="app">
   <div class="wrap">
     <div class="topbar">
@@ -222,45 +211,36 @@
 </div>
 
 <script>
-/* =========================================================
-   CONFIG / MODE
-   ========================================================= */
 const URL_ = window.SUPABASE_URL, KEY_ = window.SUPABASE_ANON_KEY;
 const CLOUD = URL_ && URL_ !== "YOUR_SUPABASE_URL" && typeof window.supabase !== "undefined";
 let sb = null, user = null;
 if (CLOUD) { try { sb = window.supabase.createClient(URL_, KEY_); } catch(e){ console.warn(e); } }
 
-const FLOOR = 30;               // $ guaranteed per box (per hour)
-const TOURNEY_RATE = 30;        // $ per tourney hour
-const OP_CHARGE = 5;            // $ the house takes per box (operation charge / tax)
+const FLOOR = 30;
+const TOURNEY_RATE = 30;
+const OP_CHARGE = 5;
 const $ = s => document.querySelector(s);
 
-/* =========================================================
-   MATH
-   ========================================================= */
 function calc(s){
-  const boxes = s.boxes || [];                  // GROSS tips per box (before the $5)
+  const boxes = s.boxes || [];
   const nBox = boxes.length;
-  const n = (s.hours && Number(s.hours)>0) ? Number(s.hours) : nBox;   // hours = boxes, unless overridden
+  const n = (s.hours && Number(s.hours)>0) ? Number(s.hours) : nBox;
   const gross = boxes.reduce((a,b)=>a+b,0);
-  const opCharge = OP_CHARGE * n;               // $5 per box the house takes
-  const tips = gross - opCharge;                // NET tips after the op charge
+  const opCharge = OP_CHARGE * n;
+  const tips = gross - opCharge;
   const floor = FLOOR * n;
-  const boxPay = Math.max(tips, floor);         // net box take-home, with $30 floor
+  const boxPay = Math.max(tips, floor);
   const topup = Math.max(0, floor - tips);
   const hourly = n ? boxPay / n : 0;
   const tHrs = Number(s.tourney_hours||0);
-  const tFlat = TOURNEY_RATE * tHrs;            // flat $30/hr tourney pay
-  const tTips = Number(s.tourney_tips||0);      // tips earned while dealing the tourney
+  const tFlat = TOURNEY_RATE * tHrs;
+  const tTips = Number(s.tourney_tips||0);
   const tPay = tFlat + tTips;
   const total = boxPay + tPay;
-  const lump = !!(s.hours && Number(s.hours)>0 && nBox<=1);   // one amount logged over many hours
+  const lump = !!(s.hours && Number(s.hours)>0 && nBox<=1);
   return {n, nBox, gross, opCharge, tips, floor, boxPay, topup, hourly, tHrs, tFlat, tTips, tPay, total, lump};
 }
 
-/* =========================================================
-   FORMAT
-   ========================================================= */
 const money = n => "$"+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const money0 = n => "$"+Math.round(Number(n||0)).toLocaleString("en-US");
 const dnum = n => (Math.round(n*100)/100).toString().replace(/\.00$/,"");
@@ -268,9 +248,6 @@ function fmtDate(iso){const [y,m,d]=iso.split("-").map(Number);return new Date(y
 function todayISO(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 const uid = () => Math.random().toString(36).slice(2,10);
 
-/* =========================================================
-   DATA LAYER  (cloud via Supabase, else local demo)
-   ========================================================= */
 const LKEY = "tokes_local_v3";
 async function dataList(){
   if (CLOUD){
@@ -298,7 +275,6 @@ async function dataDelete(id){
   DATA = DATA.filter(x=>x.id!==id); await localSave(DATA);
 }
 
-/* seed demo with Taksh's own nights */
 function seed(){return [
   {id:uid(),shift_date:"2026-08-12",boxes:[400],hours:11,tourney_hours:0,received:true},
   {id:uid(),shift_date:"2026-08-13",boxes:[27,20,23,19,100,41,67,28],tourney_hours:0,received:true},
@@ -307,16 +283,10 @@ function seed(){return [
   {id:uid(),shift_date:"2026-08-17",boxes:[125,37,47,45,35,44,27],tourney_hours:0,received:true},
 ];}
 
-/* =========================================================
-   STATE
-   ========================================================= */
 let DATA = [];
 let editing = null;
 let openId = null;
 
-/* =========================================================
-   AUTH UI
-   ========================================================= */
 let mode = "in";
 $("#segIn").onclick = ()=>setMode("in");
 $("#segUp").onclick = ()=>setMode("up");
@@ -335,8 +305,8 @@ $("#aPass").addEventListener("keydown",e=>{if(e.key==="Enter")doAuth();});
 async function doAuth(){
   const email=$("#aEmail").value.trim(), pass=$("#aPass").value;
   if(!email||!pass){msg("Enter your email and password.","err");return;}
-  if(!CLOUD){msg("Connect Supabase to turn on real login. For now, use demo mode below.","err");return;}
-  $("#aGo").disabled=true; msg(mode==="in"?"Signing in…":"Creating account…");
+  if(!CLOUD){msg("Connect Supabase to turn on real login.","err");return;}
+  $("#aGo").disabled=true; msg(mode==="in"?"Signing in...":"Creating account...");
   try{
     if(mode==="up"){
       const {data,error}=await sb.auth.signUp({email,password:pass});
@@ -350,24 +320,20 @@ async function doAuth(){
   $("#aGo").disabled=false;
 }
 
-/* demo entry when no Supabase yet */
 if(!CLOUD){
   $("#demoWrap").innerHTML =
-    `<div class="demo-note">Demo mode. Your Supabase keys aren't in yet, so login is off and data saves only on this device. Add your keys (see SETUP.md), deploy, and this same screen becomes real signup + login with a shareable link.</div>
-     <button class="btn-ghost" id="demoGo" style="margin-top:14px">Continue in demo mode →</button>`;
+    `<div class="demo-note">Demo mode. Your Supabase keys aren't in yet, so login is off and data saves only on this device.</div>
+     <button class="btn-ghost" id="demoGo" style="margin-top:14px">Continue in demo mode</button>`;
   setTimeout(()=>{ const b=$("#demoGo"); if(b) b.onclick=enterApp; },0);
 }
 
-/* =========================================================
-   ENTER APP
-   ========================================================= */
 async function enterApp(){
   $("#auth").style.display="none";
   $("#app").style.display="block";
   $("#whoName").textContent = user ? user.email : "demo";
   $("#signout").textContent = CLOUD ? "Sign out" : "Reset demo";
   $("#foot").innerHTML = CLOUD
-    ? `<span class="cloudbadge">● synced to your account</span>`
+    ? `<span class="cloudbadge">synced to your account</span>`
     : `saved on this device only`;
   let d = await dataList();
   if(!CLOUD && !d){ d = seed(); await localSave(d); }
@@ -378,14 +344,9 @@ async function enterApp(){
 
 $("#signout").onclick = async ()=>{
   if(CLOUD){ await sb.auth.signOut(); }
-  else {
-    DATA = seed(); await localSave(DATA); renderAll();
-  }
+  else { DATA = seed(); await localSave(DATA); renderAll(); }
 };
 
-/* =========================================================
-   HERO SUMMARY
-   ========================================================= */
 function renderHero(){
   let total=0, hours=0, boxPayPool=0, houseAll=0, opAll=0;
   DATA.forEach(s=>{const c=calc(s); total+=c.total; hours+=c.n; boxPayPool+=c.boxPay; houseAll+=c.topup; opAll+=c.opCharge;});
@@ -397,16 +358,13 @@ function renderHero(){
   const bits=[];
   if(opAll>0) bits.push("op charges "+money0(opAll));
   if(houseAll>0) bits.push("floor covered "+money0(houseAll));
-  $("#hHouse").textContent = bits.join("  \u00b7  ");
+  $("#hHouse").textContent = bits.join("   ");
 }
 
-/* =========================================================
-   EDITOR
-   ========================================================= */
 $("#addCta").onclick = ()=> editing ? closeEditor() : openEditor(null);
 function openEditor(s){
   editing = s ? JSON.parse(JSON.stringify(s))
-              : {id:uid(),shift_date:todayISO(),boxes:[],tourney_hours:0,received:false,_new:true};
+              : {id:uid(),shift_date:todayISO(),boxes:[],tourney_hours:0,tourney_tips:0,received:false,_new:true};
   $("#addCta").textContent="Cancel"; $("#addCta").classList.add("x");
   renderEditor(); setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),60);
 }
@@ -421,12 +379,12 @@ function renderEditor(){
        <div class="fld" style="width:96px"><label>Hours</label><input id="eHours" inputmode="decimal" placeholder="auto" value="${e.hours||""}"></div>
      </div>
      <div class="fld">
-       <label>Tips per box &nbsp;·&nbsp; full amount, before the $5</label>
+       <label>Tips per box (full amount, before the $5)</label>
        <div class="tiprow">
          <input id="tipIn" inputmode="decimal" placeholder="the full box, e.g. 27" autocomplete="off">
          <button class="plus" id="tipAdd">+</button>
        </div>
-       <p class="hint">One box per hour, so leave Hours on “auto”. Only set Hours for a lump day (one total across many hours, like $400 over 11 hrs).</p>
+       <p class="hint">One box per hour, so leave Hours on auto. Only set Hours for a lump day (one total across many hours, like $400 over 11 hrs).</p>
        <div class="boxes" id="boxes">${e.boxes.map((a,i)=>bxHTML(a,i)).join("")}</div>
      </div>
      <div class="erow">
@@ -440,7 +398,7 @@ function renderEditor(){
      </label>
      <div class="epreview">
        <div><div class="pt serif">${money(c.total)}</div>
-         <small>${(c.n?("net \u00b7 after "+money(c.opCharge)+" op charge"+(c.topup>0?" \u00b7 floored":"")):"take-home")+(c.tPay>0?(" \u00b7 +tourney "+money(c.tPay)):"")}</small></div>
+         <small>${(c.n?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"")}</small></div>
        <div style="text-align:right"><div class="ph mono">${c.n?money(c.hourly):"—"}</div>
          <small>${c.n?"per hour":"add boxes for $/hr"}</small></div>
      </div>
@@ -456,7 +414,7 @@ function renderEditor(){
   $("#saveB").onclick=commit;
   $("#boxes").onclick=ev=>{const b=ev.target.closest("button[data-i]");if(b){e.boxes.splice(+b.dataset.i,1);renderEditor();$("#tipIn").focus();}};
 }
-function bxHTML(a,i){return `<span class="bx"><small>#${i+1}</small>$${dnum(a)}<button data-i="${i}" aria-label="remove">×</button></span>`;}
+function bxHTML(a,i){return `<span class="bx"><small>#${i+1}</small>$${dnum(a)}<button data-i="${i}" aria-label="remove">x</button></span>`;}
 function addTips(){
   const inp=$("#tipIn"); const parts=inp.value.replace(/[+,]/g," ").split(/\s+/).filter(Boolean); let ok=false;
   parts.forEach(p=>{const v=parseFloat(p); if(!isNaN(v)&&v>0){editing.boxes.push(Math.round(v*100)/100);ok=true;}});
@@ -465,7 +423,7 @@ function addTips(){
 function refreshPrev(){
   const e=editing,c=calc(e),p=$("#editorMount").querySelector(".epreview"); if(!p)return;
   p.querySelector(".pt").textContent=money(c.total);
-  p.querySelector(".pt").nextElementSibling.textContent = (c.n?("net \u00b7 after "+money(c.opCharge)+" op charge"+(c.topup>0?" \u00b7 floored":"")):"take-home")+(c.tPay>0?(" \u00b7 +tourney "+money(c.tPay)):"");
+  p.querySelector(".pt").nextElementSibling.textContent = (c.n?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"");
   p.querySelector(".ph").textContent=c.n?money(c.hourly):"—";
   p.querySelector(".ph").nextElementSibling.textContent=c.n?"per hour":"add boxes for $/hr";
   const sb2=$("#saveB"); if(sb2) sb2.disabled = (e.boxes.length===0 && !c.tHrs && !c.tTips);
@@ -479,14 +437,11 @@ async function commit(){
   closeEditor(); renderAll();
 }
 
-/* =========================================================
-   RECEIPTS
-   ========================================================= */
 function renderList(){
   const m=$("#listMount");
   if(!DATA.length){
-    m.innerHTML=`<div class="empty"><b>No nights yet</b>Tap “Log a night” to start, or bring in your Aug 12–17 nights below.
-      ${CLOUD?`<button class="add-cta" id="importB" style="margin-top:18px">Import my Aug 12–17 nights</button>`:``}</div>`;
+    m.innerHTML=`<div class="empty"><b>No nights yet</b>Tap "Log a night" to start, or bring in your Aug 12-17 nights below.
+      ${CLOUD?`<button class="add-cta" id="importB" style="margin-top:18px">Import my Aug 12-17 nights</button>`:``}</div>`;
     const ib=$("#importB"); if(ib) ib.onclick=importStarter;
     return;
   }
@@ -498,7 +453,7 @@ function renderList(){
   m.querySelectorAll(".r-del").forEach(b=>b.onclick=async ev=>{ev.stopPropagation();await dataDelete(b.dataset.id);if(CLOUD)DATA=(await dataList())||[];DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));renderAll();});
 }
 async function importStarter(){
-  const b=$("#importB"); if(b){ b.disabled=true; b.textContent="Importing…"; }
+  const b=$("#importB"); if(b){ b.disabled=true; b.textContent="Importing..."; }
   for(const night of seed()){ await dataUpsert(Object.assign({}, night, {_new:true})); }
   DATA = (await dataList())||[];
   DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
@@ -516,7 +471,7 @@ function receiptHTML(s){
     ${lines||`<div class="li"><span class="k">no boxes</span><span class="dots"></span><span class="v"></span></div>`}
     <hr class="rrule">
     ${c.lump?``:`<div class="li sub"><span class="k">GROSS (${c.n} hr)</span><span class="dots"></span><span class="v">${money(c.gross)}</span></div>`}
-    ${c.n?`<div class="li house"><span class="k">OP CHARGE (${c.n}\u00d7$${OP_CHARGE})</span><span class="dots"></span><span class="v">-${money(c.opCharge)}</span></div>`:``}
+    ${c.n?`<div class="li house"><span class="k">OP CHARGE (${c.n}x$${OP_CHARGE})</span><span class="dots"></span><span class="v">-${money(c.opCharge)}</span></div>`:``}
     <div class="li sub"><span class="k">NET TIPS</span><span class="dots"></span><span class="v">${money(c.tips)}</span></div>
     ${c.topup>0?`<div class="li house"><span class="k">HOUSE FLOOR</span><span class="dots"></span><span class="v">+${money(c.topup)}</span></div>`:``}
     ${c.tHrs>0?`<div class="li tny"><span class="k">TOURNEY (${dnum(c.tHrs)} hr)</span><span class="dots"></span><span class="v">${money(c.tFlat)}</span></div>`:``}
@@ -532,9 +487,6 @@ function receiptHTML(s){
 
 function renderAll(){ renderHero(); renderList(); }
 
-/* =========================================================
-   BOOT
-   ========================================================= */
 (async function boot(){
   if(CLOUD){
     const { data:{ session } } = await sb.auth.getSession();
@@ -544,7 +496,6 @@ function renderAll(){ renderHero(); renderList(); }
       else { user=null; $("#app").style.display="none"; $("#auth").style.display="flex"; $("#aEmail").value="";$("#aPass").value=""; msg(""); }
     });
   }
-  // demo mode waits for "Continue in demo mode"
 })();
 </script>
 </body>
