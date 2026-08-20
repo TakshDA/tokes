@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Tokes — count your nights</title>
+
+<!-- ============================================================= -->
+<!--  STEP 1: paste your Supabase keys here (see SETUP.md).         -->
+<!--  Until you do, the app runs in local demo mode.               -->
+<!-- ============================================================= -->
+<script>
+  window.SUPABASE_URL = "https://hpmzxcmdiledwchseuro.supabase.co";
+  window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwbXp4Y21kaWxlZHdjaHNldXJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNDg2NDIsImV4cCI6MjEwMjgyNDY0Mn0.5qhk2c9KwiYN6wQkpmTdTbIoN8IMMr3GQZpaaxhVRMY";
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+<style>
+  :root{
+    --ink:#0C0F16; --ink-2:#141924; --ink-3:#1C2331;
+    --paper:#F4EFE3; --paper-2:#EDE6D5; --paper-line:#D8CFB9;
+    --on-paper:#1B1E26; --on-paper-dim:#7A745F;
+    --emerald:#1C7C57; --emerald-deep:#125C40;
+    --clay:#B4553F; --gold:#B98E33;
+    --cream:#ECE6D6; --cream-dim:#8B8776;
+    --line:#242C3A;
+    --r:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--ink);
+    color:var(--cream);
+    font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 46px);
+  }
+  .mono{font-family:"Space Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .serif{font-family:"Fraunces",Georgia,serif}
+  .wrap{max-width:540px;margin:0 auto;padding:16px 15px 0}
+  button{font-family:inherit;cursor:pointer}
+  input{font-family:inherit}
+
+  /* ---------------- AUTH ---------------- */
+  #auth{min-height:88vh;display:flex;flex-direction:column;justify-content:center;max-width:400px;margin:0 auto;padding:24px 20px}
+  .brand{display:flex;flex-direction:column;align-items:center;margin-bottom:26px}
+  .brand .mark{font-family:"Fraunces";font-weight:700;font-size:54px;letter-spacing:-1.5px;line-height:.9;color:var(--paper)}
+  .brand .mark em{color:var(--emerald);font-style:normal}
+  .brand .sub{margin-top:9px;color:var(--cream-dim);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase}
+  .card-auth{background:var(--ink-2);border:1px solid var(--line);border-radius:18px;padding:22px 20px}
+  .seg{display:flex;background:var(--ink);border:1px solid var(--line);border-radius:11px;padding:4px;margin-bottom:18px}
+  .seg button{flex:1;border:none;background:none;color:var(--cream-dim);font-weight:600;font-size:14px;padding:9px;border-radius:8px;transition:.15s}
+  .seg button.on{background:var(--emerald);color:#eafff5}
+  .fld{margin-bottom:13px}
+  .fld label{display:block;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--cream-dim);margin:0 0 6px 3px}
+  .fld input{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:11px;color:var(--cream);font-size:16px;padding:13px;outline:none;transition:border-color .15s,box-shadow .15s}
+  .fld input:focus{border-color:var(--emerald);box-shadow:0 0 0 3px rgba(28,124,87,.2)}
+  .btn-primary{width:100%;border:none;border-radius:12px;background:var(--emerald);color:#eafff5;font-family:"Fraunces";font-weight:600;font-size:16px;padding:14px;margin-top:6px;transition:filter .12s,transform .12s}
+  .btn-primary:active{transform:translateY(1px);filter:brightness(1.08)}
+  .btn-ghost{width:100%;margin-top:12px;background:none;border:1px solid var(--line);color:var(--cream-dim);border-radius:12px;padding:12px;font-size:14px;font-weight:500}
+  .authmsg{margin-top:14px;font-size:13px;text-align:center;line-height:1.5;min-height:18px}
+  .authmsg.err{color:var(--clay)} .authmsg.ok{color:var(--emerald)}
+  .demo-note{margin-top:18px;padding:12px 14px;background:rgba(185,142,51,.08);border:1px solid rgba(185,142,51,.3);border-radius:11px;font-size:12.5px;color:#d8c493;line-height:1.5}
+
+  /* ---------------- APP HEADER ---------------- */
+  #app{display:none}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin:6px 2px 16px}
+  .topbar .mk{font-family:"Fraunces";font-weight:700;font-size:24px;letter-spacing:-.5px;color:var(--paper)}
+  .topbar .mk em{color:var(--emerald);font-style:normal}
+  .who{display:flex;align-items:center;gap:9px}
+  .who span{font-size:12px;color:var(--cream-dim);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .who button{background:var(--ink-2);border:1px solid var(--line);color:var(--cream-dim);border-radius:9px;padding:7px 11px;font-size:12px;font-weight:600}
+
+  /* hero */
+  .hero{background:linear-gradient(160deg,var(--ink-3),var(--ink-2));border:1px solid var(--line);border-radius:18px;padding:20px 20px 16px;position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;right:-30px;top:-30px;width:150px;height:150px;background:radial-gradient(circle,rgba(28,124,87,.16),transparent 70%)}
+  .hero .lab{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--cream-dim);margin:0}
+  .hero .big{font-family:"Fraunces";font-weight:700;font-size:48px;line-height:1;color:var(--paper);margin:8px 0 4px;letter-spacing:-1px}
+  .hero .big .c{color:var(--emerald)}
+  .hero .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:16px}
+  .hero .cell{background:var(--ink-2);padding:11px 10px;text-align:center}
+  .hero .cell b{font-family:"Space Mono";font-weight:700;display:block;font-size:16px;color:var(--cream)}
+  .hero .cell span{display:block;font-size:10px;color:var(--cream-dim);margin-top:3px;letter-spacing:.08em;text-transform:uppercase}
+  .house-flag{margin-top:12px;font-size:12px;color:var(--gold);text-align:center}
+
+  .add-cta{width:100%;margin:15px 0 4px;border:none;border-radius:13px;background:var(--paper);color:var(--ink);font-family:"Fraunces";font-weight:600;font-size:15.5px;padding:15px;transition:transform .12s,filter .12s}
+  .add-cta:active{transform:translateY(1px);filter:brightness(.96)}
+  .add-cta.x{background:transparent;border:1px solid var(--line);color:var(--cream-dim);font-family:"Inter";font-weight:600}
+
+  /* ---------------- EDITOR ---------------- */
+  .editor{background:var(--ink-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin:8px 0}
+  .erow{display:flex;gap:10px;margin-bottom:13px}
+  .erow .fld{margin-bottom:0}
+  .editor .fld label{color:var(--cream-dim)}
+  .editor input{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:11px;color:var(--cream);font-size:16px;padding:12px;outline:none;transition:.15s}
+  .editor input:focus{border-color:var(--emerald);box-shadow:0 0 0 3px rgba(28,124,87,.18)}
+  .tiprow{display:flex;gap:9px}
+  .tiprow input{flex:1}
+  .plus{flex:0 0 auto;width:50px;border:none;border-radius:11px;background:var(--emerald);color:#eafff5;font-size:26px;font-weight:600;line-height:1}
+  .plus:active{filter:brightness(1.1)}
+  .hint{font-size:11.5px;color:var(--on-paper-dim);color:#736e5d;margin:7px 2px 0}
+  .boxes{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+  .bx{display:inline-flex;align-items:center;gap:7px;background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px 6px 11px;font-family:"Space Mono";font-weight:700;font-size:13px;color:var(--cream);animation:pop .15s ease}
+  @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+  .bx small{color:var(--cream-dim);font-weight:400;margin-right:1px}
+  .bx button{border:none;background:none;color:var(--cream-dim);font-size:15px;line-height:1;padding:0 1px}
+  .bx button:active{color:var(--clay)}
+  .recv{display:flex;align-items:center;gap:10px;margin-top:14px;user-select:none}
+  .recv .box{width:23px;height:23px;border-radius:7px;border:1.5px solid var(--line);display:grid;place-items:center;flex:0 0 auto;transition:.15s}
+  .recv .box.on{background:var(--emerald);border-color:var(--emerald);color:#eafff5}
+  .recv .box svg{width:13px;height:13px;opacity:0}.recv .box.on svg{opacity:1}
+  .recv span{font-size:14px}
+  .epreview{display:flex;justify-content:space-between;align-items:flex-end;margin-top:15px;padding-top:14px;border-top:1px dashed var(--line)}
+  .epreview .pt{font-family:"Fraunces";font-weight:700;font-size:27px;color:var(--paper)}
+  .epreview .ph{font-family:"Space Mono";font-weight:700;font-size:16px;color:var(--emerald)}
+  .epreview small{display:block;font-size:10.5px;color:var(--cream-dim);letter-spacing:.06em;text-transform:uppercase;margin-top:3px}
+  .save{width:100%;margin-top:15px;border:none;border-radius:12px;background:var(--emerald);color:#eafff5;font-family:"Fraunces";font-weight:600;font-size:15px;padding:14px}
+  .save:disabled{opacity:.4}
+  .save:active:not(:disabled){transform:translateY(1px)}
+
+  /* ---------------- RECEIPTS ---------------- */
+  .list{margin-top:20px;display:flex;flex-direction:column;gap:20px}
+  .sec{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--cream-dim);margin:2px 2px -6px}
+  .receipt{
+    background:var(--paper);color:var(--on-paper);border-radius:3px;
+    padding:20px 18px 16px;position:relative;
+    box-shadow:0 14px 30px rgba(0,0,0,.4);
+    background-image:linear-gradient(var(--paper),var(--paper));
+  }
+  .receipt::before,.receipt::after{content:"";position:absolute;left:0;right:0;height:9px;
+    background:radial-gradient(circle at 6px -1px, transparent 6px, var(--paper) 6.5px);
+    background-size:12px 9px;background-repeat:repeat-x}
+  .receipt::before{top:-8px;transform:rotate(180deg)}
+  .receipt::after{bottom:-8px}
+  .rhead{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--on-paper);padding-bottom:9px;margin-bottom:11px}
+  .rhead .d{font-family:"Fraunces";font-weight:700;font-size:19px}
+  .rhead .st{font-family:"Space Mono";font-size:10.5px;font-weight:700;letter-spacing:.1em;padding:3px 8px;border-radius:2px}
+  .st.paid{background:var(--emerald);color:#eafff5}
+  .st.owed{background:none;color:var(--clay);border:1px solid var(--clay)}
+  .li{display:flex;align-items:baseline;font-family:"Space Mono";font-size:13px;line-height:2;color:#4a4636}
+  .li .k{white-space:nowrap}
+  .li .dots{flex:1;border-bottom:1px dotted #b9b09a;margin:0 6px;transform:translateY(-3px)}
+  .li .v{white-space:nowrap;color:var(--on-paper);font-weight:700}
+  .rrule{border:none;border-top:1px dashed #b9b09a;margin:9px 0}
+  .li.sub .v{color:#4a4636;font-weight:700}
+  .li.house .k,.li.house .v{color:var(--clay)}
+  .li.tny .k,.li.tny .v{color:var(--gold)}
+  .li.total{font-size:15px;border-top:2px solid var(--on-paper);margin-top:6px;padding-top:7px}
+  .li.total .k{font-family:"Fraunces";font-weight:700}
+  .li.total .v{color:var(--emerald-deep);font-size:17px}
+  .stamp{position:absolute;right:14px;bottom:38px;border:2px solid var(--emerald);color:var(--emerald);
+    font-family:"Space Mono";font-weight:700;font-size:13px;padding:5px 9px;border-radius:3px;transform:rotate(-7deg);
+    letter-spacing:.02em;opacity:.92}
+  .stamp.floored{border-color:var(--clay);color:var(--clay)}
+  .rfoot{display:none;gap:9px;margin-top:14px;padding-top:12px;border-top:1px dotted #b9b09a}
+  .receipt.open .rfoot{display:flex}
+  .rfoot button{flex:1;border-radius:8px;padding:10px;font-size:13px;font-weight:600;border:1px solid #cabfa6}
+  .r-edit{background:var(--on-paper);color:var(--paper);border:none}
+  .r-del{background:none;color:var(--clay);border:1px solid rgba(180,85,63,.4)}
+  .receipt{cursor:pointer}
+
+  .empty{text-align:center;color:var(--cream-dim);padding:44px 24px;line-height:1.6}
+  .empty b{color:var(--cream);font-family:"Fraunces";display:block;font-size:18px;margin-bottom:7px}
+
+  .foot{text-align:center;color:#565342;font-size:11px;margin-top:28px;letter-spacing:.04em}
+  .cloudbadge{display:inline-flex;align-items:center;gap:5px;color:var(--emerald)}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ===================== AUTH SCREEN ===================== -->
+<div id="auth">
+  <div class="brand">
+    <div class="mark serif">Tok<em>e</em>s</div>
+    <div class="sub">count your nights</div>
+  </div>
+  <div class="card-auth">
+    <div class="seg">
+      <button id="segIn" class="on">Log in</button>
+      <button id="segUp">Sign up</button>
+    </div>
+    <div class="fld"><label>Email</label><input id="aEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com"></div>
+    <div class="fld"><label>Password</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+    <button class="btn-primary" id="aGo">Log in</button>
+    <div class="authmsg" id="aMsg"></div>
+    <div id="demoWrap"></div>
+  </div>
+</div>
+
+<!-- ===================== APP SCREEN ===================== -->
+<div id="app">
+  <div class="wrap">
+    <div class="topbar">
+      <div class="mk serif">Tok<em>e</em>s</div>
+      <div class="who"><span id="whoName"></span><button id="signout">Sign out</button></div>
+    </div>
+
+    <div class="hero">
+      <p class="lab">Take-home this period</p>
+      <div class="big serif"><span class="c" id="hTotal">$0</span></div>
+      <div class="grid">
+        <div class="cell"><b id="hHourly">$0</b><span>avg / hr</span></div>
+        <div class="cell"><b id="hHours">0</b><span>hours</span></div>
+        <div class="cell"><b id="hDays">0</b><span>nights</span></div>
+      </div>
+      <div class="house-flag" id="hHouse"></div>
+    </div>
+
+    <button class="add-cta" id="addCta">+ Log a night</button>
+    <div id="editorMount"></div>
+    <div id="listMount" class="list"></div>
+
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   CONFIG / MODE
+   ========================================================= */
+const URL_ = window.SUPABASE_URL, KEY_ = window.SUPABASE_ANON_KEY;
+const CLOUD = URL_ && URL_ !== "YOUR_SUPABASE_URL" && typeof window.supabase !== "undefined";
+let sb = null, user = null;
+if (CLOUD) { try { sb = window.supabase.createClient(URL_, KEY_); } catch(e){ console.warn(e); } }
+
+const FLOOR = 30;               // $ guaranteed per box (per hour)
+const TOURNEY_RATE = 30;        // $ per tourney hour
+const OP_CHARGE = 5;            // $ the house takes per box (operation charge / tax)
+const $ = s => document.querySelector(s);
+
+/* =========================================================
+   MATH
+   ========================================================= */
+function calc(s){
+  const boxes = s.boxes || [];                  // GROSS tips per box (before the $5)
+  const nBox = boxes.length;
+  const n = (s.hours && Number(s.hours)>0) ? Number(s.hours) : nBox;   // hours = boxes, unless overridden
+  const gross = boxes.reduce((a,b)=>a+b,0);
+  const opCharge = OP_CHARGE * n;               // $5 per box the house takes
+  const tips = gross - opCharge;                // NET tips after the op charge
+  const floor = FLOOR * n;
+  const boxPay = Math.max(tips, floor);         // net box take-home, with $30 floor
+  const topup = Math.max(0, floor - tips);
+  const hourly = n ? boxPay / n : 0;
+  const tHrs = Number(s.tourney_hours||0);
+  const tPay = TOURNEY_RATE * tHrs;
+  const total = boxPay + tPay;
+  const lump = !!(s.hours && Number(s.hours)>0 && nBox<=1);   // one amount logged over many hours
+  return {n, nBox, gross, opCharge, tips, floor, boxPay, topup, hourly, tHrs, tPay, total, lump};
+}
+
+/* =========================================================
+   FORMAT
+   ========================================================= */
+const money = n => "$"+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const money0 = n => "$"+Math.round(Number(n||0)).toLocaleString("en-US");
+const dnum = n => (Math.round(n*100)/100).toString().replace(/\.00$/,"");
+function fmtDate(iso){const [y,m,d]=iso.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});}
+function todayISO(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+const uid = () => Math.random().toString(36).slice(2,10);
+
+/* =========================================================
+   DATA LAYER  (cloud via Supabase, else local demo)
+   ========================================================= */
+const LKEY = "tokes_local_v3";
+async function dataList(){
+  if (CLOUD){
+    const { data, error } = await sb.from("shifts").select("*").order("shift_date",{ascending:false});
+    if (error){ console.warn(error); return []; }
+    return data.map(r=>({id:r.id, shift_date:r.shift_date, boxes:r.boxes||[], hours:(r.hours!=null?Number(r.hours):null), tourney_hours:Number(r.tourney_hours||0), received:!!r.received}));
+  }
+  try{ const r = await window.storage.get(LKEY); if(r&&r.value) return JSON.parse(r.value); }catch(e){}
+  return null;
+}
+async function localSave(arr){ try{ await window.storage.set(LKEY, JSON.stringify(arr)); }catch(e){} }
+async function dataUpsert(s){
+  if (CLOUD){
+    const row = {user_id:user.id, shift_date:s.shift_date, boxes:s.boxes, hours:(s.hours||null), tourney_hours:s.tourney_hours, received:s.received};
+    if (s.id && !s._new){ await sb.from("shifts").update(row).eq("id", s.id); }
+    else { await sb.from("shifts").insert(row); }
+    return;
+  }
+  const i = DATA.findIndex(x=>x.id===s.id);
+  if(i>=0) DATA[i]=s; else DATA.push(s);
+  await localSave(DATA);
+}
+async function dataDelete(id){
+  if (CLOUD){ await sb.from("shifts").delete().eq("id", id); return; }
+  DATA = DATA.filter(x=>x.id!==id); await localSave(DATA);
+}
+
+/* seed demo with Taksh's own nights */
+function seed(){return [
+  {id:uid(),shift_date:"2026-08-12",boxes:[400],hours:11,tourney_hours:0,received:true},
+  {id:uid(),shift_date:"2026-08-13",boxes:[27,20,23,19,100,41,67,28],tourney_hours:0,received:true},
+  {id:uid(),shift_date:"2026-08-14",boxes:[15,88,21,44,57,25,107,106,47],tourney_hours:0,received:true},
+  {id:uid(),shift_date:"2026-08-16",boxes:[35,30,30,55,30,95,95,20],tourney_hours:3.5,received:true},
+  {id:uid(),shift_date:"2026-08-17",boxes:[125,37,47,45,35,44,27],tourney_hours:0,received:true},
+];}
+
+/* =========================================================
+   STATE
+   ========================================================= */
+let DATA = [];
+let editing = null;
+let openId = null;
+
+/* =========================================================
+   AUTH UI
+   ========================================================= */
+let mode = "in";
+$("#segIn").onclick = ()=>setMode("in");
+$("#segUp").onclick = ()=>setMode("up");
+function setMode(m){
+  mode=m;
+  $("#segIn").classList.toggle("on",m==="in");
+  $("#segUp").classList.toggle("on",m==="up");
+  $("#aGo").textContent = m==="in"?"Log in":"Create account";
+  $("#aPass").setAttribute("autocomplete", m==="in"?"current-password":"new-password");
+  msg("");
+}
+function msg(t,k){const e=$("#aMsg");e.textContent=t;e.className="authmsg"+(k?" "+k:"");}
+$("#aGo").onclick = doAuth;
+$("#aPass").addEventListener("keydown",e=>{if(e.key==="Enter")doAuth();});
+
+async function doAuth(){
+  const email=$("#aEmail").value.trim(), pass=$("#aPass").value;
+  if(!email||!pass){msg("Enter your email and password.","err");return;}
+  if(!CLOUD){msg("Connect Supabase to turn on real login. For now, use demo mode below.","err");return;}
+  $("#aGo").disabled=true; msg(mode==="in"?"Signing in…":"Creating account…");
+  try{
+    if(mode==="up"){
+      const {data,error}=await sb.auth.signUp({email,password:pass});
+      if(error) throw error;
+      if(!data.session){ msg("Account made. Check your email to confirm, then log in.","ok"); setMode("in"); }
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email,password:pass});
+      if(error) throw error;
+    }
+  }catch(e){ msg(e.message||"Something went wrong.","err"); }
+  $("#aGo").disabled=false;
+}
+
+/* demo entry when no Supabase yet */
+if(!CLOUD){
+  $("#demoWrap").innerHTML =
+    `<div class="demo-note">Demo mode. Your Supabase keys aren't in yet, so login is off and data saves only on this device. Add your keys (see SETUP.md), deploy, and this same screen becomes real signup + login with a shareable link.</div>
+     <button class="btn-ghost" id="demoGo" style="margin-top:14px">Continue in demo mode →</button>`;
+  setTimeout(()=>{ const b=$("#demoGo"); if(b) b.onclick=enterApp; },0);
+}
+
+/* =========================================================
+   ENTER APP
+   ========================================================= */
+async function enterApp(){
+  $("#auth").style.display="none";
+  $("#app").style.display="block";
+  $("#whoName").textContent = user ? user.email : "demo";
+  $("#signout").textContent = CLOUD ? "Sign out" : "Reset demo";
+  $("#foot").innerHTML = CLOUD
+    ? `<span class="cloudbadge">● synced to your account</span>`
+    : `saved on this device only`;
+  let d = await dataList();
+  if(!CLOUD && !d){ d = seed(); await localSave(d); }
+  DATA = d || [];
+  DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
+  renderAll();
+}
+
+$("#signout").onclick = async ()=>{
+  if(CLOUD){ await sb.auth.signOut(); }
+  else {
+    DATA = seed(); await localSave(DATA); renderAll();
+  }
+};
+
+/* =========================================================
+   HERO SUMMARY
+   ========================================================= */
+function renderHero(){
+  let total=0, hours=0, boxPayPool=0, houseAll=0, opAll=0;
+  DATA.forEach(s=>{const c=calc(s); total+=c.total; hours+=c.n; boxPayPool+=c.boxPay; houseAll+=c.topup; opAll+=c.opCharge;});
+  const avg = hours? boxPayPool/hours : 0;
+  $("#hTotal").textContent = money0(total);
+  $("#hHourly").textContent = money0(avg);
+  $("#hHours").textContent = (Math.round(hours*10)/10).toString();
+  $("#hDays").textContent = DATA.length.toString();
+  const bits=[];
+  if(opAll>0) bits.push("op charges "+money0(opAll));
+  if(houseAll>0) bits.push("floor covered "+money0(houseAll));
+  $("#hHouse").textContent = bits.join("  \u00b7  ");
+}
+
+/* =========================================================
+   EDITOR
+   ========================================================= */
+$("#addCta").onclick = ()=> editing ? closeEditor() : openEditor(null);
+function openEditor(s){
+  editing = s ? JSON.parse(JSON.stringify(s))
+              : {id:uid(),shift_date:todayISO(),boxes:[],tourney_hours:0,received:false,_new:true};
+  $("#addCta").textContent="Cancel"; $("#addCta").classList.add("x");
+  renderEditor(); setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),60);
+}
+function closeEditor(){ editing=null; $("#addCta").textContent="+ Log a night"; $("#addCta").classList.remove("x"); $("#editorMount").innerHTML=""; }
+
+function renderEditor(){
+  const e=editing, c=calc(e);
+  $("#editorMount").innerHTML = `
+   <div class="editor">
+     <div class="erow">
+       <div class="fld" style="flex:1"><label>Date</label><input id="eDate" type="date" value="${e.shift_date}"></div>
+       <div class="fld" style="width:78px"><label>Hours</label><input id="eHours" inputmode="decimal" placeholder="auto" value="${e.hours||""}"></div>
+       <div class="fld" style="width:82px"><label>Tourney</label><input id="eTny" inputmode="decimal" placeholder="0" value="${e.tourney_hours||""}"></div>
+     </div>
+     <div class="fld">
+       <label>Tips per box &nbsp;·&nbsp; full amount, before the $5</label>
+       <div class="tiprow">
+         <input id="tipIn" inputmode="decimal" placeholder="the full box, e.g. 27" autocomplete="off">
+         <button class="plus" id="tipAdd">+</button>
+       </div>
+       <p class="hint">One box per hour, so leave Hours on “auto”. Only set Hours for a lump day (one total across many hours, like $400 over 11 hrs).</p>
+       <div class="boxes" id="boxes">${e.boxes.map((a,i)=>bxHTML(a,i)).join("")}</div>
+     </div>
+     <label class="recv" id="recvT">
+       <span class="box ${e.received?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+       <span>${e.received?"Got paid":"Not paid yet"}</span>
+     </label>
+     <div class="epreview">
+       <div><div class="pt serif">${money(c.total)}</div>
+         <small>${(c.n?("net \u00b7 after "+money(c.opCharge)+" op charge"+(c.topup>0?" \u00b7 floored":"")):"take-home")+(c.tPay>0?(" \u00b7 +tourney "+money(c.tPay)):"")}</small></div>
+       <div style="text-align:right"><div class="ph mono">${c.n?money(c.hourly):"—"}</div>
+         <small>${c.n?"per hour":"add boxes for $/hr"}</small></div>
+     </div>
+     <button class="save" id="saveB" ${(e.boxes.length===0 && !c.tHrs)?"disabled":""}>${e._new?"Save night":"Update night"}</button>
+   </div>`;
+  $("#eDate").onchange=ev=>{e.shift_date=ev.target.value;};
+  $("#eHours").oninput=ev=>{e.hours=parseFloat(ev.target.value)||null; refreshPrev();};
+  $("#eTny").oninput=ev=>{e.tourney_hours=parseFloat(ev.target.value)||0; refreshPrev();};
+  $("#tipAdd").onclick=addTips;
+  $("#tipIn").addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();addTips();}});
+  $("#recvT").onclick=()=>{e.received=!e.received;renderEditor();setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),40);};
+  $("#saveB").onclick=commit;
+  $("#boxes").onclick=ev=>{const b=ev.target.closest("button[data-i]");if(b){e.boxes.splice(+b.dataset.i,1);renderEditor();$("#tipIn").focus();}};
+}
+function bxHTML(a,i){return `<span class="bx"><small>#${i+1}</small>$${dnum(a)}<button data-i="${i}" aria-label="remove">×</button></span>`;}
+function addTips(){
+  const inp=$("#tipIn"); const parts=inp.value.replace(/[+,]/g," ").split(/\s+/).filter(Boolean); let ok=false;
+  parts.forEach(p=>{const v=parseFloat(p); if(!isNaN(v)&&v>0){editing.boxes.push(Math.round(v*100)/100);ok=true;}});
+  inp.value=""; if(ok)renderEditor(); setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),20);
+}
+function refreshPrev(){
+  const e=editing,c=calc(e),p=$("#editorMount").querySelector(".epreview"); if(!p)return;
+  p.querySelector(".pt").textContent=money(c.total);
+  p.querySelector(".pt").nextElementSibling.textContent = (c.n?("net \u00b7 after "+money(c.opCharge)+" op charge"+(c.topup>0?" \u00b7 floored":"")):"take-home")+(c.tPay>0?(" \u00b7 +tourney "+money(c.tPay)):"");
+  p.querySelector(".ph").textContent=c.n?money(c.hourly):"—";
+  p.querySelector(".ph").nextElementSibling.textContent=c.n?"per hour":"add boxes for $/hr";
+  const sb2=$("#saveB"); if(sb2) sb2.disabled = (e.boxes.length===0 && !c.tHrs);
+}
+async function commit(){
+  const e=editing; const wasNew=e._new; delete e._new;
+  await dataUpsert(Object.assign({}, e, {_new:wasNew}));
+  if(CLOUD){ DATA = (await dataList())||[]; }
+  else { const i=DATA.findIndex(x=>x.id===e.id); if(i>=0)DATA[i]=e; else DATA.push(e); }
+  DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
+  closeEditor(); renderAll();
+}
+
+/* =========================================================
+   RECEIPTS
+   ========================================================= */
+function renderList(){
+  const m=$("#listMount");
+  if(!DATA.length){ m.innerHTML=`<div class="empty"><b>No nights yet</b>Tap “Log a night”, drop in each box, and it prints your receipt with the $30 floor already worked in.</div>`; return; }
+  m.innerHTML = `<div class="sec">Your nights</div>` + DATA.map(receiptHTML).join("");
+  m.querySelectorAll(".receipt").forEach(el=>{
+    el.onclick=ev=>{ if(ev.target.closest("button"))return; const id=el.dataset.id; openId=(openId===id)?null:id; renderList(); };
+  });
+  m.querySelectorAll(".r-edit").forEach(b=>b.onclick=ev=>{ev.stopPropagation();openEditor(DATA.find(x=>x.id===b.dataset.id));window.scrollTo({top:0,behavior:"smooth"});});
+  m.querySelectorAll(".r-del").forEach(b=>b.onclick=async ev=>{ev.stopPropagation();await dataDelete(b.dataset.id);if(CLOUD)DATA=(await dataList())||[];DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));renderAll();});
+}
+function receiptHTML(s){
+  const c=calc(s), open=openId===s.id;
+  const lines = c.lump
+    ? `<div class="li"><span class="k">TIPS (${dnum(c.n)} hr lump)</span><span class="dots"></span><span class="v">${money(c.gross)}</span></div>`
+    : s.boxes.map((a,i)=>`<div class="li"><span class="k">BOX ${String(i+1).padStart(2,"0")}</span><span class="dots"></span><span class="v">${money(a)}</span></div>`).join("");
+  return `
+  <div class="receipt ${open?"open":""}" data-id="${s.id}">
+    <div class="rhead"><span class="d serif">${fmtDate(s.shift_date)}</span>
+      <span class="st ${s.received?"paid":"owed"}">${s.received?"PAID":"OWED"}</span></div>
+    ${lines||`<div class="li"><span class="k">no boxes</span><span class="dots"></span><span class="v"></span></div>`}
+    <hr class="rrule">
+    ${c.lump?``:`<div class="li sub"><span class="k">GROSS (${c.n} hr)</span><span class="dots"></span><span class="v">${money(c.gross)}</span></div>`}
+    ${c.n?`<div class="li house"><span class="k">OP CHARGE (${c.n}\u00d7$${OP_CHARGE})</span><span class="dots"></span><span class="v">-${money(c.opCharge)}</span></div>`:``}
+    <div class="li sub"><span class="k">NET TIPS</span><span class="dots"></span><span class="v">${money(c.tips)}</span></div>
+    ${c.topup>0?`<div class="li house"><span class="k">HOUSE FLOOR</span><span class="dots"></span><span class="v">+${money(c.topup)}</span></div>`:``}
+    ${c.tPay>0?`<div class="li tny"><span class="k">TOURNEY (${dnum(c.tHrs)} hr)</span><span class="dots"></span><span class="v">${money(c.tPay)}</span></div>`:``}
+    <div class="li total"><span class="k">TOTAL</span><span class="dots"></span><span class="v">${money(c.total)}</span></div>
+    ${c.n?`<div class="stamp ${c.topup>0?"floored":""}">${money(c.hourly)}/HR</div>`:``}
+    <div class="rfoot">
+      <button class="r-edit" data-id="${s.id}">Edit</button>
+      <button class="r-del" data-id="${s.id}">Delete</button>
+    </div>
+  </div>`;
+}
+
+function renderAll(){ renderHero(); renderList(); }
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+(async function boot(){
+  if(CLOUD){
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session){ user=session.user; enterApp(); }
+    sb.auth.onAuthStateChange((_e,sess)=>{
+      if(sess){ user=sess.user; enterApp(); }
+      else { user=null; $("#app").style.display="none"; $("#auth").style.display="flex"; $("#aEmail").value="";$("#aPass").value=""; msg(""); }
+    });
+  }
+  // demo mode waits for "Continue in demo mode"
+})();
+</script>
+</body>
+</html>
