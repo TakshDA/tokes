@@ -85,6 +85,28 @@
   .add-cta:active{transform:translateY(1px);filter:brightness(.96)}
   .add-cta.x{background:transparent;border:1px solid var(--line);color:var(--cream-dim);font-family:"Inter";font-weight:600}
 
+  .live-start{width:100%;margin:15px 0 4px;border:none;border-radius:13px;background:var(--emerald);color:#eafff5;font-family:"Fraunces";font-weight:700;font-size:16px;padding:16px;transition:filter .12s,transform .12s}
+  .live-start:active{transform:translateY(1px);filter:brightness(1.08)}
+  .live{background:linear-gradient(160deg,var(--ink-3),var(--ink-2));border:1px solid var(--emerald);border-radius:16px;padding:16px;margin:15px 0 4px;box-shadow:0 0 0 3px rgba(28,124,87,.12)}
+  .live-lab{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--emerald);font-weight:600}
+  .live-time{font-family:"Fraunces";font-weight:700;font-size:38px;color:var(--paper);line-height:1;margin:4px 0}
+  .live-sub{font-size:12px;color:var(--cream-dim)}
+  .live-boxes{margin:14px 0}
+  .lbox{background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:8px}
+  .lbox-h{font-family:"Space Mono";font-size:11px;letter-spacing:.06em;color:var(--emerald);margin-bottom:2px}
+  .lseg{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .lseg-t{font-family:"Space Mono";font-size:12px;color:var(--cream-dim);width:104px;flex:0 0 auto}
+  .lseg-tip{flex:1;min-width:0;background:var(--ink-2);border:1px solid var(--line);border-radius:8px;color:var(--cream);font-size:16px;padding:8px 10px;outline:none}
+  .lseg-tip:focus{border-color:var(--emerald)}
+  .lseg-x{flex:0 0 auto;background:none;border:none;color:var(--cream-dim);font-size:18px;padding:0 4px}
+  .live-btns{display:flex;gap:9px;margin-bottom:10px}
+  .lb-new,.lb-btb{flex:1;border-radius:11px;padding:13px 8px;font-weight:600;font-size:13.5px;border:1px solid var(--line);background:var(--ink);color:var(--cream)}
+  .lb-btb{border-color:var(--emerald);color:var(--emerald)}
+  .lb-new:active,.lb-btb:active{filter:brightness(1.25)}
+  .lb-end{width:100%;border:none;border-radius:12px;background:var(--paper);color:var(--ink);font-family:"Fraunces";font-weight:700;font-size:15px;padding:14px;margin-top:2px}
+  .lb-end:active{filter:brightness(.95)}
+  .lb-cancel{width:100%;background:none;border:none;color:var(--cream-dim);font-size:12.5px;padding:10px;margin-top:2px}
+
   .editor{background:var(--ink-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin:8px 0}
   .erow{display:flex;gap:10px;margin-bottom:13px}
   .erow .fld{margin-bottom:0}
@@ -202,7 +224,8 @@
       <div class="house-flag" id="hHouse"></div>
     </div>
 
-    <button class="add-cta" id="addCta">+ Log a night</button>
+    <div id="liveMount"></div>
+    <button class="add-cta" id="addCta">+ Log a past night</button>
     <div id="editorMount"></div>
     <div id="listMount" class="list"></div>
 
@@ -219,26 +242,29 @@ if (CLOUD) { try { sb = window.supabase.createClient(URL_, KEY_); } catch(e){ co
 const FLOOR = 30;
 const TOURNEY_RATE = 30;
 const OP_CHARGE = 5;
+const HOURS_PER_BOX = 1;
 const $ = s => document.querySelector(s);
 
 function calc(s){
   const boxes = s.boxes || [];
   const nBox = boxes.length;
-  const n = (s.hours && Number(s.hours)>0) ? Number(s.hours) : nBox;
+  const hasHours = !!(s.hours && Number(s.hours)>0);
+  const lump = hasHours && nBox<=1 && Number(s.hours)>=3;
+  const effortN = lump ? Number(s.hours) : nBox;
   const gross = boxes.reduce((a,b)=>a+b,0);
-  const opCharge = OP_CHARGE * n;
+  const opCharge = OP_CHARGE * effortN;
   const tips = gross - opCharge;
-  const floor = FLOOR * n;
+  const floor = FLOOR * effortN;
   const boxPay = Math.max(tips, floor);
   const topup = Math.max(0, floor - tips);
-  const hourly = n ? boxPay / n : 0;
+  const clockHours = hasHours ? Number(s.hours) : nBox * HOURS_PER_BOX;
+  const hourly = clockHours ? boxPay / clockHours : 0;
   const tHrs = Number(s.tourney_hours||0);
   const tFlat = TOURNEY_RATE * tHrs;
   const tTips = Number(s.tourney_tips||0);
   const tPay = tFlat + tTips;
   const total = boxPay + tPay;
-  const lump = !!(s.hours && Number(s.hours)>0 && nBox<=1);
-  return {n, nBox, gross, opCharge, tips, floor, boxPay, topup, hourly, tHrs, tFlat, tTips, tPay, total, lump};
+  return {nBox, effortN, gross, opCharge, tips, floor, boxPay, topup, clockHours, hourly, tHrs, tFlat, tTips, tPay, total, lump};
 }
 
 const money = n => "$"+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -331,6 +357,7 @@ async function enterApp(){
   DATA = d || [];
   DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
   renderAll();
+  loadLive(); if(live) startLiveClock(); renderLive();
 }
 
 $("#signout").onclick = async ()=>{
@@ -340,7 +367,7 @@ $("#signout").onclick = async ()=>{
 
 function renderHero(){
   let total=0, hours=0, boxPayPool=0, houseAll=0, opAll=0;
-  DATA.forEach(s=>{const c=calc(s); total+=c.total; hours+=c.n; boxPayPool+=c.boxPay; houseAll+=c.topup; opAll+=c.opCharge;});
+  DATA.forEach(s=>{const c=calc(s); total+=c.total; hours+=c.clockHours; boxPayPool+=c.boxPay; houseAll+=c.topup; opAll+=c.opCharge;});
   const avg = hours? boxPayPool/hours : 0;
   $("#hTotal").textContent = money0(total);
   $("#hHourly").textContent = money0(avg);
@@ -359,7 +386,7 @@ function openEditor(s){
   $("#addCta").textContent="Cancel"; $("#addCta").classList.add("x");
   renderEditor(); setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),60);
 }
-function closeEditor(){ editing=null; $("#addCta").textContent="+ Log a night"; $("#addCta").classList.remove("x"); $("#editorMount").innerHTML=""; }
+function closeEditor(){ editing=null; $("#addCta").textContent="+ Log a past night"; $("#addCta").classList.remove("x"); $("#editorMount").innerHTML=""; }
 
 function renderEditor(){
   const e=editing, c=calc(e);
@@ -375,7 +402,7 @@ function renderEditor(){
          <input id="tipIn" inputmode="decimal" placeholder="the full box, e.g. 27" autocomplete="off">
          <button class="plus" id="tipAdd">+</button>
        </div>
-       <p class="hint">One box per hour, so leave Hours on auto. Only set Hours for a lump day (one total across many hours, like $400 over 11 hrs).</p>
+       <p class="hint">For a past night, type the total Hours. For tonight, use the green Punch-in tracker up top instead, it clocks your real time.</p>
        <div class="boxes" id="boxes">${e.boxes.map((a,i)=>bxHTML(a,i)).join("")}</div>
      </div>
      <div class="erow">
@@ -389,9 +416,9 @@ function renderEditor(){
      </label>
      <div class="epreview">
        <div><div class="pt serif">${money(c.total)}</div>
-         <small>${(c.n?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"")}</small></div>
-       <div style="text-align:right"><div class="ph mono">${c.n?money(c.hourly):"—"}</div>
-         <small>${c.n?"per hour":"add boxes for $/hr"}</small></div>
+         <small>${(c.effortN?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"")}</small></div>
+       <div style="text-align:right"><div class="ph mono">${c.effortN?money(c.hourly):"—"}</div>
+         <small>${c.effortN?dnum(c.clockHours)+" hr, per hour":"add boxes for $/hr"}</small></div>
      </div>
      <button class="save" id="saveB" ${(e.boxes.length===0 && !c.tHrs && !c.tTips)?"disabled":""}>${e._new?"Save night":"Update night"}</button>
    </div>`;
@@ -414,9 +441,9 @@ function addTips(){
 function refreshPrev(){
   const e=editing,c=calc(e),p=$("#editorMount").querySelector(".epreview"); if(!p)return;
   p.querySelector(".pt").textContent=money(c.total);
-  p.querySelector(".pt").nextElementSibling.textContent = (c.n?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"");
-  p.querySelector(".ph").textContent=c.n?money(c.hourly):"—";
-  p.querySelector(".ph").nextElementSibling.textContent=c.n?"per hour":"add boxes for $/hr";
+  p.querySelector(".pt").nextElementSibling.textContent = (c.effortN?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"");
+  p.querySelector(".ph").textContent=c.effortN?money(c.hourly):"—";
+  p.querySelector(".ph").nextElementSibling.textContent=c.effortN?dnum(c.clockHours)+" hr, per hour":"add boxes for $/hr";
   const sb2=$("#saveB"); if(sb2) sb2.disabled = (e.boxes.length===0 && !c.tHrs && !c.tTips);
 }
 async function commit(){
@@ -431,7 +458,7 @@ async function commit(){
 function renderList(){
   const m=$("#listMount");
   if(!DATA.length){
-    m.innerHTML=`<div class="empty"><b>No nights yet</b>Tap "Log a night" to log your first shift.</div>`;
+    m.innerHTML=`<div class="empty"><b>No nights yet</b>Punch in up top when you start, or tap "Log a past night".</div>`;
     return;
   }
   m.innerHTML = `<div class="sec">Your nights</div>` + DATA.map(receiptHTML).join("");
@@ -444,7 +471,7 @@ function renderList(){
 function receiptHTML(s){
   const c=calc(s), open=openId===s.id;
   const lines = c.lump
-    ? `<div class="li"><span class="k">TIPS (${dnum(c.n)} hr lump)</span><span class="dots"></span><span class="v">${money(c.gross)}</span></div>`
+    ? `<div class="li"><span class="k">TIPS (${dnum(c.clockHours)} hr lump)</span><span class="dots"></span><span class="v">${money(c.gross)}</span></div>`
     : s.boxes.map((a,i)=>`<div class="li"><span class="k">BOX ${String(i+1).padStart(2,"0")}</span><span class="dots"></span><span class="v">${money(a)}</span></div>`).join("");
   return `
   <div class="receipt ${open?"open":""}" data-id="${s.id}">
@@ -452,14 +479,15 @@ function receiptHTML(s){
       <span class="st ${s.received?"paid":"owed"}">${s.received?"PAID":"OWED"}</span></div>
     ${lines||`<div class="li"><span class="k">no boxes</span><span class="dots"></span><span class="v"></span></div>`}
     <hr class="rrule">
-    ${c.lump?``:`<div class="li sub"><span class="k">GROSS (${c.n} hr)</span><span class="dots"></span><span class="v">${money(c.gross)}</span></div>`}
-    ${c.n?`<div class="li house"><span class="k">OP CHARGE (${c.n}x$${OP_CHARGE})</span><span class="dots"></span><span class="v">-${money(c.opCharge)}</span></div>`:``}
+    ${c.lump?``:`<div class="li sub"><span class="k">GROSS (${c.effortN} ${c.effortN===1?"box":"boxes"})</span><span class="dots"></span><span class="v">${money(c.gross)}</span></div>`}
+    ${c.effortN?`<div class="li house"><span class="k">OP CHARGE (${c.effortN}x$${OP_CHARGE})</span><span class="dots"></span><span class="v">-${money(c.opCharge)}</span></div>`:``}
     <div class="li sub"><span class="k">NET TIPS</span><span class="dots"></span><span class="v">${money(c.tips)}</span></div>
     ${c.topup>0?`<div class="li house"><span class="k">HOUSE FLOOR</span><span class="dots"></span><span class="v">+${money(c.topup)}</span></div>`:``}
+    ${(!c.lump && c.clockHours>0)?`<div class="li"><span class="k">HOURS</span><span class="dots"></span><span class="v">${dnum(c.clockHours)} hr</span></div>`:``}
     ${c.tHrs>0?`<div class="li tny"><span class="k">TOURNEY (${dnum(c.tHrs)} hr)</span><span class="dots"></span><span class="v">${money(c.tFlat)}</span></div>`:``}
     ${c.tTips>0?`<div class="li tny"><span class="k">TOURNEY TIPS</span><span class="dots"></span><span class="v">${money(c.tTips)}</span></div>`:``}
     <div class="li total"><span class="k">TOTAL</span><span class="dots"></span><span class="v">${money(c.total)}</span></div>
-    ${c.n?`<div class="stamp ${c.topup>0?"floored":""}">${money(c.hourly)}/HR</div>`:``}
+    ${c.effortN?`<div class="stamp ${c.topup>0?"floored":""}">${money(c.hourly)}/HR</div>`:``}
     <div class="rfoot">
       <button class="r-edit" data-id="${s.id}">Edit</button>
       <button class="r-del" data-id="${s.id}">Delete</button>
@@ -468,6 +496,77 @@ function receiptHTML(s){
 }
 
 function renderAll(){ renderHero(); renderList(); }
+
+let live = null;
+let liveInt = null;
+function loadLive(){ try{ const v=localStorage.getItem("tokes_live"); if(v) live=JSON.parse(v); }catch(e){} }
+function persistLive(){ try{ if(live) localStorage.setItem("tokes_live", JSON.stringify(live)); else localStorage.removeItem("tokes_live"); }catch(e){} }
+function fmtDur(ms){ const m=Math.max(0,Math.floor(ms/60000)); return Math.floor(m/60)+"h "+String(m%60).padStart(2,"0")+"m"; }
+function fmtClock(ms){ return new Date(ms).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}); }
+function startShift(){ const now=Date.now(); live={start:now, segs:[{t:now, btb:false, tips:""}]}; persistLive(); startLiveClock(); renderLive(); }
+function addSeg(btb){ if(!live)return; live.segs.push({t:Date.now(), btb:!!btb, tips:""}); persistLive(); renderLive(); }
+function removeSeg(i){ live.segs.splice(i,1); if(live.segs.length) live.segs[0].btb=false; persistLive(); renderLive(); if(!live.segs.length) cancelShift(); }
+function setSegTip(i,v){ if(live&&live.segs[i]) live.segs[i].tips=v; persistLive(); }
+function cancelShift(){ live=null; persistLive(); stopLiveClock(); renderLive(); }
+function startLiveClock(){ stopLiveClock(); liveInt=setInterval(()=>{const el=$("#elapsed"); if(el&&live) el.textContent=fmtDur(Date.now()-live.start);},15000); }
+function stopLiveClock(){ if(liveInt){clearInterval(liveInt); liveInt=null;} }
+function liveGroups(){
+  const g=[]; live.segs.forEach((s,i)=>{ const seg={t:s.t,btb:s.btb,tips:s.tips,i};
+    if(i===0 || !s.btb) g.push([seg]); else g[g.length-1].push(seg); });
+  return g;
+}
+async function endShift(){
+  const end=Date.now();
+  const hours=Math.round(Math.max(0,(end-live.start)/3600000)*100)/100;
+  const boxes=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0));
+  const shift={id:uid(), shift_date:todayISO(), boxes, hours, tourney_hours:0, tourney_tips:0, received:false, _new:true};
+  await dataUpsert(shift);
+  if(CLOUD){ DATA=(await dataList())||[]; } else { DATA.push(shift); }
+  DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
+  live=null; persistLive(); stopLiveClock();
+  renderAll(); renderLive();
+}
+function renderLive(){
+  const m=$("#liveMount"); if(!m) return;
+  if(!live){
+    m.innerHTML=`<button class="live-start" id="startShift">● Start shift · punch in</button>`;
+    const b=$("#startShift"); if(b) b.onclick=startShift;
+    return;
+  }
+  const groups=liveGroups();
+  const bx=groups.map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0));
+  const n=bx.length, grossT=bx.reduce((a,b)=>a+b,0);
+  const soFar=Math.max(grossT-OP_CHARGE*n, FLOOR*n);
+  m.innerHTML=`
+   <div class="live">
+     <div class="live-lab">● shift running</div>
+     <div class="live-time"><span id="elapsed">${fmtDur(Date.now()-live.start)}</span></div>
+     <div class="live-sub">started ${fmtClock(live.start)} · ${n} ${n===1?"box":"boxes"} · ${money(soFar)} so far</div>
+     <div class="live-boxes">
+       ${groups.map((seg,gi)=>`
+         <div class="lbox">
+           <div class="lbox-h">BOX ${gi+1}${seg.length>1?" · "+seg.length+" tables (back to back)":""}</div>
+           ${seg.map(s=>`<div class="lseg">
+             <span class="lseg-t">${fmtClock(s.t)}${s.btb?" b2b":""}</span>
+             <input class="lseg-tip" inputmode="decimal" placeholder="tips $" value="${s.tips}" data-i="${s.i}">
+             <button class="lseg-x" data-x="${s.i}" aria-label="remove">x</button>
+           </div>`).join("")}
+         </div>`).join("")}
+     </div>
+     <div class="live-btns">
+       <button class="lb-new" id="punchNew">+ New box<br><small>after a break</small></button>
+       <button class="lb-btb" id="punchBtb">Back to back<br><small>same box, no break</small></button>
+     </div>
+     <button class="lb-end" id="endShift">End shift &amp; save</button>
+     <button class="lb-cancel" id="cancelShift">Cancel shift</button>
+   </div>`;
+  $("#punchNew").onclick=()=>addSeg(false);
+  $("#punchBtb").onclick=()=>addSeg(true);
+  $("#endShift").onclick=endShift;
+  $("#cancelShift").onclick=()=>{ if(window.confirm("Cancel this shift? Nothing will be saved.")) cancelShift(); };
+  m.querySelectorAll(".lseg-tip").forEach(inp=>{ inp.oninput=e=>setSegTip(+e.target.dataset.i, e.target.value); inp.onchange=renderLive; });
+  m.querySelectorAll(".lseg-x").forEach(b=>b.onclick=e=>removeSeg(+e.target.dataset.x));
+}
 
 (async function boot(){
   if(CLOUD){
@@ -482,3 +581,4 @@ function renderAll(){ renderHero(); renderList(); }
 </script>
 </body>
 </html>
+
