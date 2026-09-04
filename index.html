@@ -1,12 +1,641 @@
-create table if not exists public.live_shifts (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  data jsonb not null,
-  updated_at timestamptz not null default now()
-);
-alter table public.live_shifts enable row level security;
-create policy "own_live_select" on public.live_shifts for select using (auth.uid() = user_id);
-create policy "own_live_insert" on public.live_shifts for insert with check (auth.uid() = user_id);
-create policy "own_live_update" on public.live_shifts for update using (auth.uid() = user_id);
-create policy "own_live_delete" on public.live_shifts for delete using (auth.uid() = user_id);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Tokes — count your nights</title>
 
+<script>
+  window.SUPABASE_URL = "https://hpmzxcmdiledwchseuro.supabase.co";
+  window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwbXp4Y21kaWxlZHdjaHNldXJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyNDg2NDIsImV4cCI6MjEwMjgyNDY0Mn0.5qhk2c9KwiYN6wQkpmTdTbIoN8IMMr3GQZpaaxhVRMY";
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+<style>
+  :root{
+    --ink:#0C0F16; --ink-2:#141924; --ink-3:#1C2331;
+    --paper:#F4EFE3; --paper-2:#EDE6D5; --paper-line:#D8CFB9;
+    --on-paper:#1B1E26; --on-paper-dim:#7A745F;
+    --emerald:#1C7C57; --emerald-deep:#125C40;
+    --clay:#B4553F; --gold:#B98E33;
+    --cream:#ECE6D6; --cream-dim:#8B8776;
+    --line:#242C3A;
+    --r:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--ink);
+    color:var(--cream);
+    font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 46px);
+  }
+  .mono{font-family:"Space Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .serif{font-family:"Fraunces",Georgia,serif}
+  .wrap{max-width:540px;margin:0 auto;padding:16px 15px 0}
+  button{font-family:inherit;cursor:pointer}
+  input{font-family:inherit}
+
+  #auth{min-height:88vh;display:flex;flex-direction:column;justify-content:center;max-width:400px;margin:0 auto;padding:24px 20px}
+  .brand{display:flex;flex-direction:column;align-items:center;margin-bottom:26px}
+  .brand .mark{font-family:"Fraunces";font-weight:700;font-size:54px;letter-spacing:-1.5px;line-height:.9;color:var(--paper)}
+  .brand .mark em{color:var(--emerald);font-style:normal}
+  .brand .sub{margin-top:9px;color:var(--cream-dim);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase}
+  .card-auth{background:var(--ink-2);border:1px solid var(--line);border-radius:18px;padding:22px 20px}
+  .seg{display:flex;background:var(--ink);border:1px solid var(--line);border-radius:11px;padding:4px;margin-bottom:18px}
+  .seg button{flex:1;border:none;background:none;color:var(--cream-dim);font-weight:600;font-size:14px;padding:9px;border-radius:8px;transition:.15s}
+  .seg button.on{background:var(--emerald);color:#eafff5}
+  .fld{margin-bottom:13px}
+  .fld label{display:block;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--cream-dim);margin:0 0 6px 3px}
+  .fld input{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:11px;color:var(--cream);font-size:16px;padding:13px;outline:none;transition:border-color .15s,box-shadow .15s}
+  .fld input:focus{border-color:var(--emerald);box-shadow:0 0 0 3px rgba(28,124,87,.2)}
+  .btn-primary{width:100%;border:none;border-radius:12px;background:var(--emerald);color:#eafff5;font-family:"Fraunces";font-weight:600;font-size:16px;padding:14px;margin-top:6px;transition:filter .12s,transform .12s}
+  .btn-primary:active{transform:translateY(1px);filter:brightness(1.08)}
+  .btn-ghost{width:100%;margin-top:12px;background:none;border:1px solid var(--line);color:var(--cream-dim);border-radius:12px;padding:12px;font-size:14px;font-weight:500}
+  .authmsg{margin-top:14px;font-size:13px;text-align:center;line-height:1.5;min-height:18px}
+  .authmsg.err{color:var(--clay)} .authmsg.ok{color:var(--emerald)}
+  .demo-note{margin-top:18px;padding:12px 14px;background:rgba(185,142,51,.08);border:1px solid rgba(185,142,51,.3);border-radius:11px;font-size:12.5px;color:#d8c493;line-height:1.5}
+
+  #app{display:none}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin:6px 2px 16px}
+  .topbar .mk{font-family:"Fraunces";font-weight:700;font-size:24px;letter-spacing:-.5px;color:var(--paper)}
+  .topbar .mk em{color:var(--emerald);font-style:normal}
+  .who{display:flex;align-items:center;gap:9px}
+  .who span{font-size:12px;color:var(--cream-dim);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .who button{background:var(--ink-2);border:1px solid var(--line);color:var(--cream-dim);border-radius:9px;padding:7px 11px;font-size:12px;font-weight:600}
+
+  .hero{background:linear-gradient(160deg,var(--ink-3),var(--ink-2));border:1px solid var(--line);border-radius:18px;padding:20px 20px 16px;position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;right:-30px;top:-30px;width:150px;height:150px;background:radial-gradient(circle,rgba(28,124,87,.16),transparent 70%)}
+  .hero .lab{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--cream-dim);margin:0}
+  .hero .big{font-family:"Fraunces";font-weight:700;font-size:48px;line-height:1;color:var(--paper);margin:8px 0 4px;letter-spacing:-1px}
+  .hero .big .c{color:var(--emerald)}
+  .hero .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:16px}
+  .hero .cell{background:var(--ink-2);padding:11px 10px;text-align:center}
+  .hero .cell b{font-family:"Space Mono";font-weight:700;display:block;font-size:16px;color:var(--cream)}
+  .hero .cell span{display:block;font-size:10px;color:var(--cream-dim);margin-top:3px;letter-spacing:.08em;text-transform:uppercase}
+  .house-flag{margin-top:12px;font-size:12px;color:var(--gold);text-align:center}
+
+  .add-cta{width:100%;margin:15px 0 4px;border:none;border-radius:13px;background:var(--paper);color:var(--ink);font-family:"Fraunces";font-weight:600;font-size:15.5px;padding:15px;transition:transform .12s,filter .12s}
+  .add-cta:active{transform:translateY(1px);filter:brightness(.96)}
+  .add-cta.x{background:transparent;border:1px solid var(--line);color:var(--cream-dim);font-family:"Inter";font-weight:600}
+
+  .live-start{width:100%;margin:15px 0 4px;border:none;border-radius:13px;background:var(--emerald);color:#eafff5;font-family:"Fraunces";font-weight:700;font-size:16px;padding:16px;transition:filter .12s,transform .12s}
+  .live-start:active{transform:translateY(1px);filter:brightness(1.08)}
+  .live{background:linear-gradient(160deg,var(--ink-3),var(--ink-2));border:1px solid var(--emerald);border-radius:16px;padding:16px;margin:15px 0 4px;box-shadow:0 0 0 3px rgba(28,124,87,.12)}
+  .live-lab{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--emerald);font-weight:600}
+  .live-time{font-family:"Fraunces";font-weight:700;font-size:38px;color:var(--paper);line-height:1;margin:4px 0}
+  .live-sub{font-size:12px;color:var(--cream-dim)}
+  .live-boxes{margin:14px 0}
+  .lbox{background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:8px}
+  .lbox-h{font-family:"Space Mono";font-size:11px;letter-spacing:.06em;color:var(--emerald);margin-bottom:2px}
+  .lseg{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .lseg-t{font-family:"Space Mono";font-size:12px;color:var(--cream-dim);width:104px;flex:0 0 auto}
+  .lseg-tip{flex:1;min-width:0;background:var(--ink-2);border:1px solid var(--line);border-radius:8px;color:var(--cream);font-size:16px;padding:8px 10px;outline:none}
+  .lseg-tip:focus{border-color:var(--emerald)}
+  .lseg-x{flex:0 0 auto;background:none;border:none;color:var(--cream-dim);font-size:18px;padding:0 4px}
+  .live-btns{display:flex;gap:9px;margin-bottom:10px}
+  .lb-new,.lb-btb{flex:1;border-radius:11px;padding:13px 8px;font-weight:600;font-size:13.5px;border:1px solid var(--line);background:var(--ink);color:var(--cream)}
+  .lb-btb{border-color:var(--emerald);color:var(--emerald)}
+  .lb-new:active,.lb-btb:active{filter:brightness(1.25)}
+  .lb-end{width:100%;border:none;border-radius:12px;background:var(--paper);color:var(--ink);font-family:"Fraunces";font-weight:700;font-size:15px;padding:14px;margin-top:2px}
+  .lb-end:active{filter:brightness(.95)}
+  .lb-cancel{width:100%;background:none;border:none;color:var(--cream-dim);font-size:12.5px;padding:10px;margin-top:2px}
+  .tny-box{margin-bottom:10px}
+  .tny-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);border:1px solid rgba(185,142,51,.4);border-radius:11px;padding:11px 13px}
+  .tny-time{font-family:"Space Mono";font-weight:700;font-size:22px;color:var(--gold);margin-top:2px}
+  .tny-btn{flex:0 0 auto;border:1px solid var(--gold);background:none;color:var(--gold);border-radius:9px;padding:11px 14px;font-weight:700;font-size:13px}
+  .tny-btn.on{background:var(--gold);color:#20180a}
+
+  .editor{background:var(--ink-2);border:1px solid var(--line);border-radius:16px;padding:16px;margin:8px 0}
+  .erow{display:flex;gap:10px;margin-bottom:13px}
+  .erow .fld{margin-bottom:0}
+  .editor .fld label{color:var(--cream-dim)}
+  .editor input{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:11px;color:var(--cream);font-size:16px;padding:12px;outline:none;transition:.15s}
+  .editor input:focus{border-color:var(--emerald);box-shadow:0 0 0 3px rgba(28,124,87,.18)}
+  .tiprow{display:flex;gap:9px}
+  .tiprow input{flex:1}
+  .plus{flex:0 0 auto;width:50px;border:none;border-radius:11px;background:var(--emerald);color:#eafff5;font-size:26px;font-weight:600;line-height:1}
+  .plus:active{filter:brightness(1.1)}
+  .hint{font-size:11.5px;color:#736e5d;margin:7px 2px 0}
+  .boxes{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+  .bx{display:inline-flex;align-items:center;gap:7px;background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px 6px 11px;font-family:"Space Mono";font-weight:700;font-size:13px;color:var(--cream);animation:pop .15s ease}
+  @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+  .bx small{color:var(--cream-dim);font-weight:400;margin-right:1px}
+  .bx button{border:none;background:none;color:var(--cream-dim);font-size:15px;line-height:1;padding:0 1px}
+  .bx button:active{color:var(--clay)}
+  .recv{display:flex;align-items:center;gap:10px;margin-top:14px;user-select:none}
+  .recv .box{width:23px;height:23px;border-radius:7px;border:1.5px solid var(--line);display:grid;place-items:center;flex:0 0 auto;transition:.15s}
+  .recv .box.on{background:var(--emerald);border-color:var(--emerald);color:#eafff5}
+  .recv .box svg{width:13px;height:13px;opacity:0}.recv .box.on svg{opacity:1}
+  .recv span{font-size:14px}
+  .epreview{display:flex;justify-content:space-between;align-items:flex-end;margin-top:15px;padding-top:14px;border-top:1px dashed var(--line)}
+  .epreview .pt{font-family:"Fraunces";font-weight:700;font-size:27px;color:var(--paper)}
+  .epreview .ph{font-family:"Space Mono";font-weight:700;font-size:16px;color:var(--emerald)}
+  .epreview small{display:block;font-size:10.5px;color:var(--cream-dim);letter-spacing:.06em;text-transform:uppercase;margin-top:3px}
+  .save{width:100%;margin-top:15px;border:none;border-radius:12px;background:var(--emerald);color:#eafff5;font-family:"Fraunces";font-weight:600;font-size:15px;padding:14px}
+  .save:disabled{opacity:.4}
+  .save:active:not(:disabled){transform:translateY(1px)}
+
+  .list{margin-top:20px;display:flex;flex-direction:column;gap:20px}
+  .sec{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--cream-dim);margin:2px 2px -6px}
+  .receipt{
+    background:var(--paper);color:var(--on-paper);border-radius:3px;
+    padding:20px 18px 16px;position:relative;
+    box-shadow:0 14px 30px rgba(0,0,0,.4);
+    background-image:linear-gradient(var(--paper),var(--paper));
+    cursor:pointer;
+  }
+  .receipt::before,.receipt::after{content:"";position:absolute;left:0;right:0;height:9px;
+    background:radial-gradient(circle at 6px -1px, transparent 6px, var(--paper) 6.5px);
+    background-size:12px 9px;background-repeat:repeat-x}
+  .receipt::before{top:-8px;transform:rotate(180deg)}
+  .receipt::after{bottom:-8px}
+  .rhead{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--on-paper);padding-bottom:9px;margin-bottom:11px}
+  .rhead .d{font-family:"Fraunces";font-weight:700;font-size:19px}
+  .rhead .st{font-family:"Space Mono";font-size:10.5px;font-weight:700;letter-spacing:.1em;padding:3px 8px;border-radius:2px}
+  .st.paid{background:var(--emerald);color:#eafff5}
+  .st.owed{background:none;color:var(--clay);border:1px solid var(--clay)}
+  .li{display:flex;align-items:baseline;font-family:"Space Mono";font-size:13px;line-height:2;color:#4a4636}
+  .li .k{white-space:nowrap}
+  .li .dots{flex:1;border-bottom:1px dotted #b9b09a;margin:0 6px;transform:translateY(-3px)}
+  .li .v{white-space:nowrap;color:var(--on-paper);font-weight:700}
+  .rrule{border:none;border-top:1px dashed #b9b09a;margin:9px 0}
+  .li.sub .v{color:#4a4636;font-weight:700}
+  .li.house .k,.li.house .v{color:var(--clay)}
+  .li.tny .k,.li.tny .v{color:var(--gold)}
+  .li.total{font-size:15px;border-top:2px solid var(--on-paper);margin-top:6px;padding-top:7px}
+  .li.total .k{font-family:"Fraunces";font-weight:700}
+  .li.total .v{color:var(--emerald-deep);font-size:17px}
+  .stamp{position:absolute;right:14px;bottom:38px;border:2px solid var(--emerald);color:var(--emerald);
+    font-family:"Space Mono";font-weight:700;font-size:13px;padding:5px 9px;border-radius:3px;transform:rotate(-7deg);
+    letter-spacing:.02em;opacity:.92}
+  .stamp.floored{border-color:var(--clay);color:var(--clay)}
+  .rfoot{display:none;gap:9px;margin-top:14px;padding-top:12px;border-top:1px dotted #b9b09a}
+  .receipt.open .rfoot{display:flex}
+  .rfoot button{flex:1;border-radius:8px;padding:10px;font-size:13px;font-weight:600;border:1px solid #cabfa6}
+  .r-edit{background:var(--on-paper);color:var(--paper);border:none}
+  .r-del{background:none;color:var(--clay);border:1px solid rgba(180,85,63,.4)}
+
+  .empty{text-align:center;color:var(--cream-dim);padding:44px 24px;line-height:1.6}
+  .empty b{color:var(--cream);font-family:"Fraunces";display:block;font-size:18px;margin-bottom:7px}
+
+  .foot{text-align:center;color:#565342;font-size:11px;margin-top:28px;letter-spacing:.04em}
+  .cloudbadge{display:inline-flex;align-items:center;gap:5px;color:var(--emerald)}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div id="auth">
+  <div class="brand">
+    <div class="mark serif">Tok<em>e</em>s</div>
+    <div class="sub">count your nights</div>
+  </div>
+  <div class="card-auth">
+    <div class="seg">
+      <button id="segIn" class="on">Log in</button>
+      <button id="segUp">Sign up</button>
+    </div>
+    <div class="fld"><label>Email</label><input id="aEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com"></div>
+    <div class="fld"><label>Password</label><input id="aPass" type="password" autocomplete="current-password" placeholder="password"></div>
+    <button class="btn-primary" id="aGo">Log in</button>
+    <div class="authmsg" id="aMsg"></div>
+    <div id="demoWrap"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="wrap">
+    <div class="topbar">
+      <div class="mk serif">Tok<em>e</em>s</div>
+      <div class="who"><span id="whoName"></span><button id="signout">Sign out</button></div>
+    </div>
+
+    <div class="hero">
+      <p class="lab">Take-home this period</p>
+      <div class="big serif"><span class="c" id="hTotal">$0</span></div>
+      <div class="grid">
+        <div class="cell"><b id="hHourly">$0</b><span>avg / hr</span></div>
+        <div class="cell"><b id="hHours">0</b><span>hours</span></div>
+        <div class="cell"><b id="hDays">0</b><span>nights</span></div>
+      </div>
+      <div class="house-flag" id="hHouse"></div>
+    </div>
+
+    <div id="liveMount"></div>
+    <button class="add-cta" id="addCta">+ Log a past night</button>
+    <div id="editorMount"></div>
+    <div id="listMount" class="list"></div>
+
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+
+<script>
+const URL_ = window.SUPABASE_URL, KEY_ = window.SUPABASE_ANON_KEY;
+const CLOUD = URL_ && URL_ !== "YOUR_SUPABASE_URL" && typeof window.supabase !== "undefined";
+let sb = null, user = null;
+if (CLOUD) { try { sb = window.supabase.createClient(URL_, KEY_); } catch(e){ console.warn(e); } }
+
+const FLOOR = 30;
+const TOURNEY_RATE = 30;
+const OP_CHARGE = 5;
+const HOURS_PER_BOX = 1;
+const $ = s => document.querySelector(s);
+
+function calc(s){
+  const boxes = s.boxes || [];
+  const nBox = boxes.length;
+  const hasHours = !!(s.hours && Number(s.hours)>0);
+  const lump = hasHours && nBox<=1 && Number(s.hours)>=3;
+  const effortN = lump ? Number(s.hours) : nBox;
+  const gross = boxes.reduce((a,b)=>a+b,0);
+  const opCharge = OP_CHARGE * effortN;
+  const tips = gross - opCharge;
+  const floor = FLOOR * effortN;
+  const boxPay = Math.max(tips, floor);
+  const topup = Math.max(0, floor - tips);
+  const clockHours = hasHours ? Number(s.hours) : nBox * HOURS_PER_BOX;
+  const hourly = clockHours ? boxPay / clockHours : 0;
+  const tHrs = Number(s.tourney_hours||0);
+  const tFlat = TOURNEY_RATE * tHrs;
+  const tTips = Number(s.tourney_tips||0);
+  const tPay = tFlat + tTips;
+  const total = boxPay + tPay;
+  return {nBox, effortN, gross, opCharge, tips, floor, boxPay, topup, clockHours, hourly, tHrs, tFlat, tTips, tPay, total, lump};
+}
+
+const money = n => "$"+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const money0 = n => "$"+Math.round(Number(n||0)).toLocaleString("en-US");
+const dnum = n => (Math.round(n*100)/100).toString().replace(/\.00$/,"");
+function fmtDate(iso){const [y,m,d]=iso.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"});}
+function todayISO(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+const uid = () => Math.random().toString(36).slice(2,10);
+
+const LKEY = "tokes_local_v3";
+async function dataList(){
+  if (CLOUD){
+    const { data, error } = await sb.from("shifts").select("*").order("shift_date",{ascending:false});
+    if (error){ console.warn(error); return []; }
+    return data.map(r=>({id:r.id, shift_date:r.shift_date, boxes:r.boxes||[], hours:(r.hours!=null?Number(r.hours):null), tourney_hours:Number(r.tourney_hours||0), tourney_tips:Number(r.tourney_tips||0), received:!!r.received}));
+  }
+  try{ const r = await window.storage.get(LKEY); if(r&&r.value) return JSON.parse(r.value); }catch(e){}
+  return null;
+}
+async function localSave(arr){ try{ await window.storage.set(LKEY, JSON.stringify(arr)); }catch(e){} }
+async function dataUpsert(s){
+  if (CLOUD){
+    const row = {user_id:user.id, shift_date:s.shift_date, boxes:s.boxes, hours:(s.hours||null), tourney_hours:s.tourney_hours, tourney_tips:(s.tourney_tips||0), received:s.received};
+    if (s.id && !s._new){ await sb.from("shifts").update(row).eq("id", s.id); }
+    else { await sb.from("shifts").insert(row); }
+    return;
+  }
+  const i = DATA.findIndex(x=>x.id===s.id);
+  if(i>=0) DATA[i]=s; else DATA.push(s);
+  await localSave(DATA);
+}
+async function dataDelete(id){
+  if (CLOUD){ await sb.from("shifts").delete().eq("id", id); return; }
+  DATA = DATA.filter(x=>x.id!==id); await localSave(DATA);
+}
+
+function seed(){return [
+  {id:uid(),shift_date:"2026-08-12",boxes:[400],hours:11,tourney_hours:0,received:true},
+  {id:uid(),shift_date:"2026-08-13",boxes:[27,20,23,19,100,41,67,28],tourney_hours:0,received:true},
+  {id:uid(),shift_date:"2026-08-14",boxes:[15,88,21,44,57,25,107,106,47],tourney_hours:0,received:true},
+  {id:uid(),shift_date:"2026-08-16",boxes:[35,30,30,55,30,95,95,20],tourney_hours:3.5,received:true},
+  {id:uid(),shift_date:"2026-08-17",boxes:[125,37,47,45,35,44,27],tourney_hours:0,received:true},
+];}
+
+let DATA = [];
+let editing = null;
+let openId = null;
+
+let mode = "in";
+$("#segIn").onclick = ()=>setMode("in");
+$("#segUp").onclick = ()=>setMode("up");
+function setMode(m){
+  mode=m;
+  $("#segIn").classList.toggle("on",m==="in");
+  $("#segUp").classList.toggle("on",m==="up");
+  $("#aGo").textContent = m==="in"?"Log in":"Create account";
+  $("#aPass").setAttribute("autocomplete", m==="in"?"current-password":"new-password");
+  msg("");
+}
+function msg(t,k){const e=$("#aMsg");e.textContent=t;e.className="authmsg"+(k?" "+k:"");}
+$("#aGo").onclick = doAuth;
+$("#aPass").addEventListener("keydown",e=>{if(e.key==="Enter")doAuth();});
+
+async function doAuth(){
+  const email=$("#aEmail").value.trim(), pass=$("#aPass").value;
+  if(!email||!pass){msg("Enter your email and password.","err");return;}
+  if(!CLOUD){msg("Connect Supabase to turn on real login.","err");return;}
+  $("#aGo").disabled=true; msg(mode==="in"?"Signing in...":"Creating account...");
+  try{
+    if(mode==="up"){
+      const {data,error}=await sb.auth.signUp({email,password:pass});
+      if(error) throw error;
+      if(!data.session){ msg("Account made. Check your email to confirm, then log in.","ok"); setMode("in"); }
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email,password:pass});
+      if(error) throw error;
+    }
+  }catch(e){ msg(e.message||"Something went wrong.","err"); }
+  $("#aGo").disabled=false;
+}
+
+if(!CLOUD){
+  $("#demoWrap").innerHTML =
+    `<div class="demo-note">Demo mode. Your Supabase keys aren't in yet, so login is off and data saves only on this device.</div>
+     <button class="btn-ghost" id="demoGo" style="margin-top:14px">Continue in demo mode</button>`;
+  setTimeout(()=>{ const b=$("#demoGo"); if(b) b.onclick=enterApp; },0);
+}
+
+async function enterApp(){
+  $("#auth").style.display="none";
+  $("#app").style.display="block";
+  $("#whoName").textContent = user ? user.email : "demo";
+  $("#signout").textContent = CLOUD ? "Sign out" : "Reset demo";
+  $("#foot").innerHTML = CLOUD
+    ? `<span class="cloudbadge">synced to your account</span>`
+    : `saved on this device only`;
+  let d = await dataList();
+  DATA = d || [];
+  DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
+  renderAll();
+  await loadLive(); if(live) startLiveClock(); renderLive();
+}
+
+$("#signout").onclick = async ()=>{
+  if(CLOUD){ await sb.auth.signOut(); }
+  else { DATA = []; await localSave(DATA); renderAll(); }
+};
+
+function renderHero(){
+  let total=0, hours=0, boxPayPool=0, houseAll=0, opAll=0;
+  DATA.forEach(s=>{const c=calc(s); total+=c.total; hours+=c.clockHours; boxPayPool+=c.boxPay; houseAll+=c.topup; opAll+=c.opCharge;});
+  const avg = hours? boxPayPool/hours : 0;
+  $("#hTotal").textContent = money0(total);
+  $("#hHourly").textContent = money0(avg);
+  $("#hHours").textContent = (Math.round(hours*10)/10).toString();
+  $("#hDays").textContent = DATA.length.toString();
+  const bits=[];
+  if(opAll>0) bits.push("op charges "+money0(opAll));
+  if(houseAll>0) bits.push("floor covered "+money0(houseAll));
+  $("#hHouse").textContent = bits.join("   ");
+}
+
+$("#addCta").onclick = ()=> editing ? closeEditor() : openEditor(null);
+function openEditor(s){
+  editing = s ? JSON.parse(JSON.stringify(s))
+              : {id:uid(),shift_date:todayISO(),boxes:[],tourney_hours:0,tourney_tips:0,received:false,_new:true};
+  $("#addCta").textContent="Cancel"; $("#addCta").classList.add("x");
+  renderEditor(); setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),60);
+}
+function closeEditor(){ editing=null; $("#addCta").textContent="+ Log a past night"; $("#addCta").classList.remove("x"); $("#editorMount").innerHTML=""; }
+
+function renderEditor(){
+  const e=editing, c=calc(e);
+  $("#editorMount").innerHTML = `
+   <div class="editor">
+     <div class="erow">
+       <div class="fld" style="flex:1"><label>Date</label><input id="eDate" type="date" value="${e.shift_date}"></div>
+       <div class="fld" style="width:96px"><label>Hours</label><input id="eHours" inputmode="decimal" placeholder="auto" value="${e.hours||""}"></div>
+     </div>
+     <div class="fld">
+       <label>Tips per box (full amount, before the $5)</label>
+       <div class="tiprow">
+         <input id="tipIn" inputmode="decimal" placeholder="the full box, e.g. 27" autocomplete="off">
+         <button class="plus" id="tipAdd">+</button>
+       </div>
+       <p class="hint">For a past night, type the total Hours. For tonight, use the green Punch-in tracker up top instead, it clocks your real time.</p>
+       <div class="boxes" id="boxes">${e.boxes.map((a,i)=>bxHTML(a,i)).join("")}</div>
+     </div>
+     <div class="erow">
+       <div class="fld" style="flex:1"><label>Tourney hrs</label><input id="eTny" inputmode="decimal" placeholder="0" value="${e.tourney_hours||""}"></div>
+       <div class="fld" style="flex:1"><label>Tourney tips $</label><input id="eTnyTips" inputmode="decimal" placeholder="0" value="${e.tourney_tips||""}"></div>
+     </div>
+     <p class="hint" style="margin-top:-4px">Tourney pays $30/hr flat, plus whatever tips you make dealing it.</p>
+     <label class="recv" id="recvT">
+       <span class="box ${e.received?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+       <span>${e.received?"Got paid":"Not paid yet"}</span>
+     </label>
+     <div class="epreview">
+       <div><div class="pt serif">${money(c.total)}</div>
+         <small>${(c.effortN?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"")}</small></div>
+       <div style="text-align:right"><div class="ph mono">${c.effortN?money(c.hourly):"—"}</div>
+         <small>${c.effortN?dnum(c.clockHours)+" hr, per hour":"add boxes for $/hr"}</small></div>
+     </div>
+     <button class="save" id="saveB" ${(e.boxes.length===0 && !c.tHrs && !c.tTips)?"disabled":""}>${e._new?"Save night":"Update night"}</button>
+   </div>`;
+  $("#eDate").onchange=ev=>{e.shift_date=ev.target.value;};
+  $("#eHours").oninput=ev=>{e.hours=parseFloat(ev.target.value)||null; refreshPrev();};
+  $("#eTny").oninput=ev=>{e.tourney_hours=parseFloat(ev.target.value)||0; refreshPrev();};
+  $("#eTnyTips").oninput=ev=>{e.tourney_tips=parseFloat(ev.target.value)||0; refreshPrev();};
+  $("#tipAdd").onclick=addTips;
+  $("#tipIn").addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();addTips();}});
+  $("#recvT").onclick=()=>{e.received=!e.received;renderEditor();setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),40);};
+  $("#saveB").onclick=commit;
+  $("#boxes").onclick=ev=>{const b=ev.target.closest("button[data-i]");if(b){e.boxes.splice(+b.dataset.i,1);renderEditor();$("#tipIn").focus();}};
+}
+function bxHTML(a,i){return `<span class="bx"><small>#${i+1}</small>$${dnum(a)}<button data-i="${i}" aria-label="remove">x</button></span>`;}
+function addTips(){
+  const inp=$("#tipIn"); const parts=inp.value.replace(/[+,]/g," ").split(/\s+/).filter(Boolean); let ok=false;
+  parts.forEach(p=>{const v=parseFloat(p); if(!isNaN(v)&&v>0){editing.boxes.push(Math.round(v*100)/100);ok=true;}});
+  inp.value=""; if(ok)renderEditor(); setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),20);
+}
+function refreshPrev(){
+  const e=editing,c=calc(e),p=$("#editorMount").querySelector(".epreview"); if(!p)return;
+  p.querySelector(".pt").textContent=money(c.total);
+  p.querySelector(".pt").nextElementSibling.textContent = (c.effortN?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"");
+  p.querySelector(".ph").textContent=c.effortN?money(c.hourly):"—";
+  p.querySelector(".ph").nextElementSibling.textContent=c.effortN?dnum(c.clockHours)+" hr, per hour":"add boxes for $/hr";
+  const sb2=$("#saveB"); if(sb2) sb2.disabled = (e.boxes.length===0 && !c.tHrs && !c.tTips);
+}
+async function commit(){
+  const e=editing; const wasNew=e._new; delete e._new;
+  await dataUpsert(Object.assign({}, e, {_new:wasNew}));
+  if(CLOUD){ DATA = (await dataList())||[]; }
+  else { const i=DATA.findIndex(x=>x.id===e.id); if(i>=0)DATA[i]=e; else DATA.push(e); }
+  DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
+  closeEditor(); renderAll();
+}
+
+function renderList(){
+  const m=$("#listMount");
+  if(!DATA.length){
+    m.innerHTML=`<div class="empty"><b>No nights yet</b>Punch in up top when you start, or tap "Log a past night".</div>`;
+    return;
+  }
+  m.innerHTML = `<div class="sec">Your nights</div>` + DATA.map(receiptHTML).join("");
+  m.querySelectorAll(".receipt").forEach(el=>{
+    el.onclick=ev=>{ if(ev.target.closest("button"))return; const id=el.dataset.id; openId=(openId===id)?null:id; renderList(); };
+  });
+  m.querySelectorAll(".r-edit").forEach(b=>b.onclick=ev=>{ev.stopPropagation();openEditor(DATA.find(x=>x.id===b.dataset.id));window.scrollTo({top:0,behavior:"smooth"});});
+  m.querySelectorAll(".r-del").forEach(b=>b.onclick=async ev=>{ev.stopPropagation();await dataDelete(b.dataset.id);if(CLOUD)DATA=(await dataList())||[];DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));renderAll();});
+}
+function receiptHTML(s){
+  const c=calc(s), open=openId===s.id;
+  const lines = c.lump
+    ? `<div class="li"><span class="k">TIPS (${dnum(c.clockHours)} hr lump)</span><span class="dots"></span><span class="v">${money(c.gross)}</span></div>`
+    : s.boxes.map((a,i)=>`<div class="li"><span class="k">BOX ${String(i+1).padStart(2,"0")}</span><span class="dots"></span><span class="v">${money(a)}</span></div>`).join("");
+  return `
+  <div class="receipt ${open?"open":""}" data-id="${s.id}">
+    <div class="rhead"><span class="d serif">${fmtDate(s.shift_date)}</span>
+      <span class="st ${s.received?"paid":"owed"}">${s.received?"PAID":"OWED"}</span></div>
+    ${lines||`<div class="li"><span class="k">no boxes</span><span class="dots"></span><span class="v"></span></div>`}
+    <hr class="rrule">
+    ${c.lump?``:`<div class="li sub"><span class="k">GROSS (${c.effortN} ${c.effortN===1?"box":"boxes"})</span><span class="dots"></span><span class="v">${money(c.gross)}</span></div>`}
+    ${c.effortN?`<div class="li house"><span class="k">OP CHARGE (${c.effortN}x$${OP_CHARGE})</span><span class="dots"></span><span class="v">-${money(c.opCharge)}</span></div>`:``}
+    <div class="li sub"><span class="k">NET TIPS</span><span class="dots"></span><span class="v">${money(c.tips)}</span></div>
+    ${c.topup>0?`<div class="li house"><span class="k">HOUSE FLOOR</span><span class="dots"></span><span class="v">+${money(c.topup)}</span></div>`:``}
+    ${(!c.lump && c.clockHours>0)?`<div class="li"><span class="k">HOURS</span><span class="dots"></span><span class="v">${dnum(c.clockHours)} hr</span></div>`:``}
+    ${c.tHrs>0?`<div class="li tny"><span class="k">TOURNEY (${dnum(c.tHrs)} hr)</span><span class="dots"></span><span class="v">${money(c.tFlat)}</span></div>`:``}
+    ${c.tTips>0?`<div class="li tny"><span class="k">TOURNEY TIPS</span><span class="dots"></span><span class="v">${money(c.tTips)}</span></div>`:``}
+    <div class="li total"><span class="k">TOTAL</span><span class="dots"></span><span class="v">${money(c.total)}</span></div>
+    ${c.effortN?`<div class="stamp ${c.topup>0?"floored":""}">${money(c.hourly)}/HR</div>`:``}
+    <div class="rfoot">
+      <button class="r-edit" data-id="${s.id}">Edit</button>
+      <button class="r-del" data-id="${s.id}">Delete</button>
+    </div>
+  </div>`;
+}
+
+function renderAll(){ renderHero(); renderList(); }
+
+let live = null;
+let liveInt = null;
+let liveSaveTimer=null;
+async function loadLive(){
+  if(CLOUD && user){
+    try{ const {data,error}=await sb.from("live_shifts").select("data").eq("user_id",user.id).maybeSingle();
+         live = (!error && data && data.data) ? data.data : null; }
+    catch(e){ live=null; }
+    return;
+  }
+  try{ const v=localStorage.getItem("tokes_live"); live = v?JSON.parse(v):null; }catch(e){}
+}
+async function cloudSaveLive(){
+  if(!CLOUD || !user) return;
+  try{
+    if(live){ await sb.from("live_shifts").upsert({user_id:user.id, data:live, updated_at:new Date().toISOString()}); }
+    else { await sb.from("live_shifts").delete().eq("user_id", user.id); }
+  }catch(e){ console.warn(e); }
+}
+function persistLive(){
+  if(CLOUD){ clearTimeout(liveSaveTimer); liveSaveTimer=setTimeout(cloudSaveLive, 500); return; }
+  try{ if(live) localStorage.setItem("tokes_live", JSON.stringify(live)); else localStorage.removeItem("tokes_live"); }catch(e){}
+}
+function fmtDur(ms){ const m=Math.max(0,Math.floor(ms/60000)); return Math.floor(m/60)+"h "+String(m%60).padStart(2,"0")+"m"; }
+function fmtClock(ms){ return new Date(ms).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}); }
+function startShift(){ const now=Date.now(); live={start:now, segs:[{t:now, btb:false, tips:""}], tHrs:0, tOn:null, tTips:""}; persistLive(); startLiveClock(); renderLive(); }
+function addSeg(btb){ if(!live)return; live.segs.push({t:Date.now(), btb:!!btb, tips:""}); persistLive(); renderLive(); }
+function removeSeg(i){ live.segs.splice(i,1); if(live.segs.length) live.segs[0].btb=false; persistLive(); renderLive(); if(!live.segs.length) cancelShift(); }
+function setSegTip(i,v){ if(live&&live.segs[i]) live.segs[i].tips=v; persistLive(); }
+function toggleTourney(){
+  if(!live) return;
+  if(live.tOn){ live.tHrs=(live.tHrs||0)+(Date.now()-live.tOn)/3600000; live.tOn=null; }
+  else { live.tOn=Date.now(); }
+  persistLive(); renderLive();
+}
+function tourneyHrs(){ return (live.tHrs||0) + (live.tOn ? (Date.now()-live.tOn)/3600000 : 0); }
+async function cancelShift(){ live=null; clearTimeout(liveSaveTimer); if(CLOUD){ await cloudSaveLive(); } else { persistLive(); } stopLiveClock(); renderLive(); }
+function startLiveClock(){ stopLiveClock(); liveInt=setInterval(()=>{
+  if(!live) return;
+  const el=$("#elapsed"); if(el) el.textContent=fmtDur(Date.now()-live.start);
+  const te=$("#tElapsed"); if(te) te.textContent=fmtDur(tourneyHrs()*3600000);
+},10000); }
+function stopLiveClock(){ if(liveInt){clearInterval(liveInt); liveInt=null;} }
+function liveGroups(){
+  const g=[]; live.segs.forEach((s,i)=>{ const seg={t:s.t,btb:s.btb,tips:s.tips,i};
+    if(i===0 || !s.btb) g.push([seg]); else g[g.length-1].push(seg); });
+  return g;
+}
+async function endShift(){
+  const end=Date.now();
+  if(live.tOn){ live.tHrs=(live.tHrs||0)+(end-live.tOn)/3600000; live.tOn=null; }
+  const hours=Math.round(Math.max(0,(end-live.start)/3600000)*100)/100;
+  const boxes=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0));
+  const shift={id:uid(), shift_date:todayISO(), boxes, hours, tourney_hours:Math.round((live.tHrs||0)*100)/100, tourney_tips:(parseFloat(live.tTips)||0), received:false, _new:true};
+  await dataUpsert(shift);
+  if(CLOUD){ DATA=(await dataList())||[]; } else { DATA.push(shift); }
+  DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
+  live=null; clearTimeout(liveSaveTimer);
+  if(CLOUD){ await cloudSaveLive(); } else { persistLive(); }
+  stopLiveClock();
+  renderAll(); renderLive();
+}
+function renderLive(){
+  const m=$("#liveMount"); if(!m) return;
+  if(!live){
+    m.innerHTML=`<button class="live-start" id="startShift">● Start shift · punch in</button>`;
+    const b=$("#startShift"); if(b) b.onclick=startShift;
+    return;
+  }
+  const groups=liveGroups();
+  const bx=groups.map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0));
+  const n=bx.length, grossT=bx.reduce((a,b)=>a+b,0);
+  const tHrsNow=tourneyHrs();
+  const tPay=tHrsNow*TOURNEY_RATE + (parseFloat(live.tTips)||0);
+  const soFar=Math.max(grossT-OP_CHARGE*n, FLOOR*n)+tPay;
+  m.innerHTML=`
+   <div class="live">
+     <div class="live-lab">● shift running</div>
+     <div class="live-time"><span id="elapsed">${fmtDur(Date.now()-live.start)}</span></div>
+     <div class="live-sub">started ${fmtClock(live.start)} · ${n} ${n===1?"box":"boxes"} · ${money(soFar)} so far</div>
+     <div class="live-boxes">
+       ${groups.map((seg,gi)=>`
+         <div class="lbox">
+           <div class="lbox-h">BOX ${gi+1}${seg.length>1?" · "+seg.length+" tables (back to back)":""}</div>
+           ${seg.map(s=>`<div class="lseg">
+             <span class="lseg-t">${fmtClock(s.t)}${s.btb?" b2b":""}</span>
+             <input class="lseg-tip" inputmode="decimal" placeholder="tips $" value="${s.tips}" data-i="${s.i}">
+             <button class="lseg-x" data-x="${s.i}" aria-label="remove">x</button>
+           </div>`).join("")}
+         </div>`).join("")}
+     </div>
+     <div class="live-btns">
+       <button class="lb-new" id="punchNew">+ New box<br><small>after a break</small></button>
+       <button class="lb-btb" id="punchBtb">Back to back<br><small>same box, no break</small></button>
+     </div>
+     <div class="tny-box">
+       <div class="tny-row">
+         <div><div class="lbox-h" style="color:var(--gold);margin:0">TOURNEY${live.tOn?" · running":""}</div>
+           <div class="tny-time"><span id="tElapsed">${fmtDur(tHrsNow*3600000)}</span></div></div>
+         <button class="tny-btn ${live.tOn?"on":""}" id="tnyToggle">${live.tOn?"■ Stop":(tHrsNow>0?"▶ Resume":"▶ Start tourney")}</button>
+       </div>
+       ${(tHrsNow>0||live.tOn)?`<input class="lseg-tip" id="ltTips" inputmode="decimal" placeholder="tourney tips $" value="${live.tTips||""}" style="width:100%;margin-top:9px">`:``}
+     </div>
+     <button class="lb-end" id="endShift">End shift &amp; save</button>
+     <button class="lb-cancel" id="cancelShift">Cancel shift</button>
+   </div>`;
+  $("#punchNew").onclick=()=>addSeg(false);
+  $("#punchBtb").onclick=()=>addSeg(true);
+  $("#tnyToggle").onclick=toggleTourney;
+  const tt=$("#ltTips"); if(tt){ tt.oninput=e=>{live.tTips=e.target.value; persistLive();}; tt.onchange=renderLive; }
+  $("#endShift").onclick=endShift;
+  $("#cancelShift").onclick=()=>{ if(window.confirm("Cancel this shift? Nothing will be saved.")) cancelShift(); };
+  m.querySelectorAll(".lseg-tip[data-i]").forEach(inp=>{ inp.oninput=e=>setSegTip(+e.target.dataset.i, e.target.value); inp.onchange=renderLive; });
+  m.querySelectorAll(".lseg-x").forEach(b=>b.onclick=e=>removeSeg(+e.target.dataset.x));
+}
+
+(async function boot(){
+  if(CLOUD){
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session){ user=session.user; enterApp(); }
+    sb.auth.onAuthStateChange((_e,sess)=>{
+      if(sess){ user=sess.user; enterApp(); }
+      else { user=null; live=null; stopLiveClock(); const lm=$("#liveMount"); if(lm) lm.innerHTML=""; $("#app").style.display="none"; $("#auth").style.display="flex"; $("#aEmail").value="";$("#aPass").value=""; msg(""); }
+    });
+  }
+})();
+</script>
+</body>
+</html>
