@@ -94,8 +94,13 @@
   .live-boxes{margin:14px 0}
   .lbox{background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:8px}
   .lbox-h{font-family:"Space Mono";font-size:11px;letter-spacing:.06em;color:var(--emerald);margin-bottom:2px}
-  .lseg{display:flex;align-items:center;gap:8px;margin-top:6px}
-  .lseg-t{font-family:"Space Mono";font-size:12px;color:var(--cream-dim);width:104px;flex:0 0 auto}
+  .lseg{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)}
+  .lbox .lseg:first-child{border-top:none;margin-top:6px;padding-top:0}
+  .lseg-time-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .lt-adj{flex:0 0 auto;min-width:46px;background:var(--ink-2);border:1px solid var(--line);color:var(--cream);border-radius:8px;font-family:"Space Mono";font-size:13px;font-weight:700;padding:8px 0}
+  .lt-adj:active{border-color:var(--emerald);color:var(--emerald)}
+  .lseg-t{font-family:"Space Mono";font-size:13px;color:var(--cream-dim);flex:1;text-align:center}
+  .lseg-tip-row{display:flex;align-items:center;gap:8px}
   .lseg-tip{flex:1;min-width:0;background:var(--ink-2);border:1px solid var(--line);border-radius:8px;color:var(--cream);font-size:16px;padding:8px 10px;outline:none}
   .lseg-tip:focus{border-color:var(--emerald)}
   .lseg-x{flex:0 0 auto;background:none;border:none;color:var(--cream-dim);font-size:18px;padding:0 4px}
@@ -529,28 +534,30 @@ async function cloudSaveLive(){
     else { await sb.from("live_shifts").delete().eq("user_id", user.id); }
   }catch(e){ console.warn(e); }
 }
-function persistLive(){
-  if(CLOUD){ clearTimeout(liveSaveTimer); liveSaveTimer=setTimeout(cloudSaveLive, 500); return; }
-  try{ if(live) localStorage.setItem("tokes_live", JSON.stringify(live)); else localStorage.removeItem("tokes_live"); }catch(e){}
-}
+function localPersist(){ try{ if(live) localStorage.setItem("tokes_live", JSON.stringify(live)); else localStorage.removeItem("tokes_live"); }catch(e){} }
+function persistLive(){ if(CLOUD){ clearTimeout(liveSaveTimer); liveSaveTimer=setTimeout(cloudSaveLive, 400); } else localPersist(); }
+function persistLiveNow(){ clearTimeout(liveSaveTimer); if(CLOUD){ cloudSaveLive(); } else localPersist(); }
 function fmtDur(ms){ const m=Math.max(0,Math.floor(ms/60000)); return Math.floor(m/60)+"h "+String(m%60).padStart(2,"0")+"m"; }
 function fmtClock(ms){ return new Date(ms).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}); }
-function startShift(){ const now=Date.now(); live={start:now, segs:[{t:now, btb:false, tips:""}], tHrs:0, tOn:null, tTips:""}; persistLive(); startLiveClock(); renderLive(); }
-function addSeg(btb){ if(!live)return; live.segs.push({t:Date.now(), btb:!!btb, tips:""}); persistLive(); renderLive(); }
-function removeSeg(i){ live.segs.splice(i,1); if(live.segs.length) live.segs[0].btb=false; persistLive(); renderLive(); if(!live.segs.length) cancelShift(); }
+function startShift(){ const now=Date.now(); live={start:now, segs:[{t:now, btb:false, tips:""}], tHrs:0, tOn:null, tTips:""}; persistLiveNow(); startLiveClock(); renderLive(); }
+function addSeg(btb){ if(!live)return; live.segs.push({t:Date.now(), btb:!!btb, tips:""}); persistLiveNow(); renderLive(); }
+function removeSeg(i){ live.segs.splice(i,1); if(live.segs.length) live.segs[0].btb=false; persistLiveNow(); renderLive(); if(!live.segs.length) cancelShift(); }
 function setSegTip(i,v){ if(live&&live.segs[i]) live.segs[i].tips=v; persistLive(); }
+function adjustSegTime(i,dm){ if(!live||!live.segs[i])return; live.segs[i].t+=dm*60000; if(i===0) live.start+=dm*60000; persistLiveNow(); renderLive(); }
 function toggleTourney(){
   if(!live) return;
   if(live.tOn){ live.tHrs=(live.tHrs||0)+(Date.now()-live.tOn)/3600000; live.tOn=null; }
   else { live.tOn=Date.now(); }
-  persistLive(); renderLive();
+  persistLiveNow(); renderLive();
 }
 function tourneyHrs(){ return (live.tHrs||0) + (live.tOn ? (Date.now()-live.tOn)/3600000 : 0); }
-async function cancelShift(){ live=null; clearTimeout(liveSaveTimer); if(CLOUD){ await cloudSaveLive(); } else { persistLive(); } stopLiveClock(); renderLive(); }
+function tourneyHrsPaid(){ return Math.round(tourneyHrs()); }
+async function cancelShift(){ live=null; clearTimeout(liveSaveTimer); if(CLOUD){ await cloudSaveLive(); } else { localPersist(); } stopLiveClock(); renderLive(); }
 function startLiveClock(){ stopLiveClock(); liveInt=setInterval(()=>{
   if(!live) return;
   const el=$("#elapsed"); if(el) el.textContent=fmtDur(Date.now()-live.start);
   const te=$("#tElapsed"); if(te) te.textContent=fmtDur(tourneyHrs()*3600000);
+  const tp=$("#tPaidNote"); if(tp) tp.textContent="counts as "+tourneyHrsPaid()+" hr · "+money(tourneyHrsPaid()*TOURNEY_RATE);
 },10000); }
 function stopLiveClock(){ if(liveInt){clearInterval(liveInt); liveInt=null;} }
 function liveGroups(){
@@ -563,12 +570,12 @@ async function endShift(){
   if(live.tOn){ live.tHrs=(live.tHrs||0)+(end-live.tOn)/3600000; live.tOn=null; }
   const hours=Math.round(Math.max(0,(end-live.start)/3600000)*100)/100;
   const boxes=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0));
-  const shift={id:uid(), shift_date:todayISO(), boxes, hours, tourney_hours:Math.round((live.tHrs||0)*100)/100, tourney_tips:(parseFloat(live.tTips)||0), received:false, _new:true};
+  const shift={id:uid(), shift_date:todayISO(), boxes, hours, tourney_hours:Math.round(live.tHrs||0), tourney_tips:(parseFloat(live.tTips)||0), received:false, _new:true};
   await dataUpsert(shift);
   if(CLOUD){ DATA=(await dataList())||[]; } else { DATA.push(shift); }
   DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
   live=null; clearTimeout(liveSaveTimer);
-  if(CLOUD){ await cloudSaveLive(); } else { persistLive(); }
+  if(CLOUD){ await cloudSaveLive(); } else { localPersist(); }
   stopLiveClock();
   renderAll(); renderLive();
 }
@@ -583,7 +590,8 @@ function renderLive(){
   const bx=groups.map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0));
   const n=bx.length, grossT=bx.reduce((a,b)=>a+b,0);
   const tHrsNow=tourneyHrs();
-  const tPay=tHrsNow*TOURNEY_RATE + (parseFloat(live.tTips)||0);
+  const tPaid=tourneyHrsPaid();
+  const tPay=tPaid*TOURNEY_RATE + (parseFloat(live.tTips)||0);
   const soFar=Math.max(grossT-OP_CHARGE*n, FLOOR*n)+tPay;
   m.innerHTML=`
    <div class="live">
@@ -595,9 +603,15 @@ function renderLive(){
          <div class="lbox">
            <div class="lbox-h">BOX ${gi+1}${seg.length>1?" · "+seg.length+" tables (back to back)":""}</div>
            ${seg.map(s=>`<div class="lseg">
-             <span class="lseg-t">${fmtClock(s.t)}${s.btb?" b2b":""}</span>
-             <input class="lseg-tip" inputmode="decimal" placeholder="tips $" value="${s.tips}" data-i="${s.i}">
-             <button class="lseg-x" data-x="${s.i}" aria-label="remove">x</button>
+             <div class="lseg-time-row">
+               <button class="lt-adj" data-adj="-5" data-si="${s.i}">−5</button>
+               <span class="lseg-t">${fmtClock(s.t)}${s.btb?" · b2b":""}</span>
+               <button class="lt-adj" data-adj="5" data-si="${s.i}">+5</button>
+             </div>
+             <div class="lseg-tip-row">
+               <input class="lseg-tip" inputmode="decimal" placeholder="tips $" value="${s.tips}" data-i="${s.i}">
+               <button class="lseg-x" data-x="${s.i}" aria-label="remove">×</button>
+             </div>
            </div>`).join("")}
          </div>`).join("")}
      </div>
@@ -608,7 +622,8 @@ function renderLive(){
      <div class="tny-box">
        <div class="tny-row">
          <div><div class="lbox-h" style="color:var(--gold);margin:0">TOURNEY${live.tOn?" · running":""}</div>
-           <div class="tny-time"><span id="tElapsed">${fmtDur(tHrsNow*3600000)}</span></div></div>
+           <div class="tny-time"><span id="tElapsed">${fmtDur(tHrsNow*3600000)}</span></div>
+           <div id="tPaidNote" style="font-size:11px;color:var(--cream-dim);margin-top:1px">counts as ${tPaid} hr · ${money(tPaid*TOURNEY_RATE)}</div></div>
          <button class="tny-btn ${live.tOn?"on":""}" id="tnyToggle">${live.tOn?"■ Stop":(tHrsNow>0?"▶ Resume":"▶ Start tourney")}</button>
        </div>
        ${(tHrsNow>0||live.tOn)?`<input class="lseg-tip" id="ltTips" inputmode="decimal" placeholder="tourney tips $" value="${live.tTips||""}" style="width:100%;margin-top:9px">`:``}
@@ -619,12 +634,16 @@ function renderLive(){
   $("#punchNew").onclick=()=>addSeg(false);
   $("#punchBtb").onclick=()=>addSeg(true);
   $("#tnyToggle").onclick=toggleTourney;
-  const tt=$("#ltTips"); if(tt){ tt.oninput=e=>{live.tTips=e.target.value; persistLive();}; tt.onchange=renderLive; }
+  const tt=$("#ltTips"); if(tt){ tt.oninput=e=>{live.tTips=e.target.value; persistLive();}; tt.onchange=e=>{live.tTips=e.target.value; persistLiveNow(); renderLive();}; }
   $("#endShift").onclick=endShift;
   $("#cancelShift").onclick=()=>{ if(window.confirm("Cancel this shift? Nothing will be saved.")) cancelShift(); };
-  m.querySelectorAll(".lseg-tip[data-i]").forEach(inp=>{ inp.oninput=e=>setSegTip(+e.target.dataset.i, e.target.value); inp.onchange=renderLive; });
+  m.querySelectorAll(".lt-adj").forEach(b=>b.onclick=e=>adjustSegTime(+e.currentTarget.dataset.si, +e.currentTarget.dataset.adj));
+  m.querySelectorAll(".lseg-tip[data-i]").forEach(inp=>{ inp.oninput=e=>setSegTip(+e.target.dataset.i, e.target.value); inp.onchange=e=>{ setSegTip(+e.target.dataset.i, e.target.value); persistLiveNow(); renderLive(); }; });
   m.querySelectorAll(".lseg-x").forEach(b=>b.onclick=e=>removeSeg(+e.target.dataset.x));
 }
+
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden" && live) persistLiveNow(); });
+window.addEventListener("pagehide",()=>{ if(live) persistLiveNow(); });
 
 (async function boot(){
   if(CLOUD){
