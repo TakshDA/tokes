@@ -558,6 +558,7 @@ function startLiveClock(){ stopLiveClock(); liveInt=setInterval(()=>{
   const el=$("#elapsed"); if(el) el.textContent=fmtDur(Date.now()-live.start);
   const te=$("#tElapsed"); if(te) te.textContent=fmtDur(tourneyHrs()*3600000);
   const tp=$("#tPaidNote"); if(tp) tp.textContent="counts as "+tourneyHrsPaid()+" hr · "+money(tourneyHrsPaid()*TOURNEY_RATE);
+  const lh=$("#liveHr"); if(lh){ const bxg=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0)); const nn=bxg.length; const gt=bxg.reduce((a,b)=>a+b,0); const sf=Math.max(gt-OP_CHARGE*nn, FLOOR*nn)+tourneyHrsPaid()*TOURNEY_RATE+(parseFloat(live.tTips)||0); const eh=Math.max(0,(Date.now()-live.start)/3600000); lh.textContent=money(eh?sf/eh:0)+"/hr"; }
 },10000); }
 function stopLiveClock(){ if(liveInt){clearInterval(liveInt); liveInt=null;} }
 function liveGroups(){
@@ -593,11 +594,13 @@ function renderLive(){
   const tPaid=tourneyHrsPaid();
   const tPay=tPaid*TOURNEY_RATE + (parseFloat(live.tTips)||0);
   const soFar=Math.max(grossT-OP_CHARGE*n, FLOOR*n)+tPay;
+  const elapsedHrs=Math.max(0,(Date.now()-live.start)/3600000);
+  const liveHourly=elapsedHrs?soFar/elapsedHrs:0;
   m.innerHTML=`
    <div class="live">
      <div class="live-lab">● shift running</div>
      <div class="live-time"><span id="elapsed">${fmtDur(Date.now()-live.start)}</span></div>
-     <div class="live-sub">started ${fmtClock(live.start)} · ${n} ${n===1?"box":"boxes"} · ${money(soFar)} so far</div>
+     <div class="live-sub">started ${fmtClock(live.start)} · ${n} ${n===1?"box":"boxes"} · ${money(soFar)} so far · <span id="liveHr" style="color:var(--emerald);font-weight:600">${money(liveHourly)}/hr</span></div>
      <div class="live-boxes">
        ${groups.map((seg,gi)=>`
          <div class="lbox">
@@ -655,6 +658,3 @@ window.addEventListener("pagehide",()=>{ if(live) persistLiveNow(); });
     });
   }
 })();
-</script>
-</body>
-</html>
