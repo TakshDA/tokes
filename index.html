@@ -264,16 +264,17 @@ function calc(s){
   const gross = boxes.reduce((a,b)=>a+b,0);
   const opCharge = OP_CHARGE * effortN;
   const tips = gross - opCharge;
-  const floor = FLOOR * effortN;
+  const clockHours = hasHours ? Number(s.hours) : nBox * HOURS_PER_BOX;
+  const tHrs = Number(s.tourney_hours||0);
+  const floorHrs = Math.max(0, clockHours - tHrs);
+  const floor = FLOOR * floorHrs;
   const boxPay = Math.max(tips, floor);
   const topup = Math.max(0, floor - tips);
-  const clockHours = hasHours ? Number(s.hours) : nBox * HOURS_PER_BOX;
-  const hourly = clockHours ? boxPay / clockHours : 0;
-  const tHrs = Number(s.tourney_hours||0);
   const tFlat = TOURNEY_RATE * tHrs;
   const tTips = Number(s.tourney_tips||0);
   const tPay = tFlat + tTips;
   const total = boxPay + tPay;
+  const hourly = clockHours ? total / clockHours : 0;
   return {nBox, effortN, gross, opCharge, tips, floor, boxPay, topup, clockHours, hourly, tHrs, tFlat, tTips, tPay, total, lump};
 }
 
@@ -386,7 +387,7 @@ $("#signout").onclick = async ()=>{
 function renderHero(){
   let total=0, hours=0, boxPayPool=0, houseAll=0, opAll=0;
   DATA.forEach(s=>{const c=calc(s); total+=c.total; hours+=c.clockHours; boxPayPool+=c.boxPay; houseAll+=c.topup; opAll+=c.opCharge;});
-  const avg = hours? boxPayPool/hours : 0;
+  const avg = hours? total/hours : 0;
   $("#hTotal").textContent = money0(total);
   $("#hHourly").textContent = money0(avg);
   $("#hHours").textContent = (Math.round(hours*10)/10).toString();
@@ -435,8 +436,8 @@ function renderEditor(){
      <div class="epreview">
        <div><div class="pt serif">${money(c.total)}</div>
          <small>${(c.effortN?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"")}</small></div>
-       <div style="text-align:right"><div class="ph mono">${c.effortN?money(c.hourly):"—"}</div>
-         <small>${c.effortN?dnum(c.clockHours)+" hr, per hour":"add boxes for $/hr"}</small></div>
+       <div style="text-align:right"><div class="ph mono">${c.clockHours?money(c.hourly):"—"}</div>
+         <small>${c.clockHours?dnum(c.clockHours)+" hr, per hour":"add boxes for $/hr"}</small></div>
      </div>
      <button class="save" id="saveB" ${(e.boxes.length===0 && !c.tHrs && !c.tTips)?"disabled":""}>${e._new?"Save night":"Update night"}</button>
    </div>`;
@@ -460,8 +461,8 @@ function refreshPrev(){
   const e=editing,c=calc(e),p=$("#editorMount").querySelector(".epreview"); if(!p)return;
   p.querySelector(".pt").textContent=money(c.total);
   p.querySelector(".pt").nextElementSibling.textContent = (c.effortN?("net, after "+money(c.opCharge)+" op charge"+(c.topup>0?", floored":"")):"take-home")+(c.tPay>0?(", +tourney "+money(c.tPay)):"");
-  p.querySelector(".ph").textContent=c.effortN?money(c.hourly):"—";
-  p.querySelector(".ph").nextElementSibling.textContent=c.effortN?dnum(c.clockHours)+" hr, per hour":"add boxes for $/hr";
+  p.querySelector(".ph").textContent=c.clockHours?money(c.hourly):"—";
+  p.querySelector(".ph").nextElementSibling.textContent=c.clockHours?dnum(c.clockHours)+" hr, per hour":"add boxes for $/hr";
   const sb2=$("#saveB"); if(sb2) sb2.disabled = (e.boxes.length===0 && !c.tHrs && !c.tTips);
 }
 async function commit(){
@@ -505,7 +506,7 @@ function receiptHTML(s){
     ${c.tHrs>0?`<div class="li tny"><span class="k">TOURNEY (${dnum(c.tHrs)} hr)</span><span class="dots"></span><span class="v">${money(c.tFlat)}</span></div>`:``}
     ${c.tTips>0?`<div class="li tny"><span class="k">TOURNEY TIPS</span><span class="dots"></span><span class="v">${money(c.tTips)}</span></div>`:``}
     <div class="li total"><span class="k">TOTAL</span><span class="dots"></span><span class="v">${money(c.total)}</span></div>
-    ${c.effortN?`<div class="stamp ${c.topup>0?"floored":""}">${money(c.hourly)}/HR</div>`:``}
+    ${c.clockHours?`<div class="stamp ${c.topup>0?"floored":""}">${money(c.hourly)}/HR</div>`:``}
     <div class="rfoot">
       <button class="r-edit" data-id="${s.id}">Edit</button>
       <button class="r-del" data-id="${s.id}">Delete</button>
@@ -558,6 +559,7 @@ function startLiveClock(){ stopLiveClock(); liveInt=setInterval(()=>{
   const el=$("#elapsed"); if(el) el.textContent=fmtDur(Date.now()-live.start);
   const te=$("#tElapsed"); if(te) te.textContent=fmtDur(tourneyHrs()*3600000);
   const tp=$("#tPaidNote"); if(tp) tp.textContent="counts as "+tourneyHrsPaid()+" hr · "+money(tourneyHrsPaid()*TOURNEY_RATE);
+  const lh=$("#liveHr"); if(lh){ const bxg=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0)); const nn=bxg.length; const gt=bxg.reduce((a,b)=>a+b,0); const eh=Math.max(0,(Date.now()-live.start)/3600000); const fh=Math.max(0,eh-tourneyHrsPaid()); const sf=Math.max(gt-OP_CHARGE*nn, FLOOR*fh)+tourneyHrsPaid()*TOURNEY_RATE+(parseFloat(live.tTips)||0); lh.textContent=money(eh?sf/eh:0)+"/hr"; }
 },10000); }
 function stopLiveClock(){ if(liveInt){clearInterval(liveInt); liveInt=null;} }
 function liveGroups(){
@@ -592,12 +594,15 @@ function renderLive(){
   const tHrsNow=tourneyHrs();
   const tPaid=tourneyHrsPaid();
   const tPay=tPaid*TOURNEY_RATE + (parseFloat(live.tTips)||0);
-  const soFar=Math.max(grossT-OP_CHARGE*n, FLOOR*n)+tPay;
+  const elapsedHrs=Math.max(0,(Date.now()-live.start)/3600000);
+  const floorHrsLive=Math.max(0, elapsedHrs - tPaid);
+  const soFar=Math.max(grossT-OP_CHARGE*n, FLOOR*floorHrsLive)+tPay;
+  const liveHourly=elapsedHrs?soFar/elapsedHrs:0;
   m.innerHTML=`
    <div class="live">
      <div class="live-lab">● shift running</div>
      <div class="live-time"><span id="elapsed">${fmtDur(Date.now()-live.start)}</span></div>
-     <div class="live-sub">started ${fmtClock(live.start)} · ${n} ${n===1?"box":"boxes"} · ${money(soFar)} so far</div>
+     <div class="live-sub">started ${fmtClock(live.start)} · ${n} ${n===1?"box":"boxes"} · ${money(soFar)} so far · <span id="liveHr" style="color:var(--emerald);font-weight:600">${money(liveHourly)}/hr</span></div>
      <div class="live-boxes">
        ${groups.map((seg,gi)=>`
          <div class="lbox">
