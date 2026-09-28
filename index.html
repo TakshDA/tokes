@@ -407,15 +407,45 @@ function renderChart(){
   for(let i=1;i<n;i++){const a=pts[i-1],b=pts[i];const cx=(a[0]+b[0])/2;d+=" C "+cx.toFixed(1)+" "+a[1].toFixed(1)+" "+cx.toFixed(1)+" "+b[1].toFixed(1)+" "+b[0].toFixed(1)+" "+b[1].toFixed(1);}
   const area=d+" L "+X(n-1).toFixed(1)+" "+(H-pad)+" L "+X(0).toFixed(1)+" "+(H-pad)+" Z";
   const last=pts[n-1], lastV=vals[n-1];
-  const lbl = chartMetric==="hours" ? dnum(lastV)+" hr" : money0(lastV);
+  const fmtV=v=> chartMetric==="hours" ? dnum(v)+" hr" : money0(v);
   m.innerHTML =
-    '<svg width="100%" height="152" viewBox="0 0 360 152" preserveAspectRatio="none" style="overflow:visible;display:block">'+
+    '<div id="chartWrap" style="position:relative;touch-action:none">'+
+    '<svg id="chartSvg" width="100%" height="152" viewBox="0 0 360 152" preserveAspectRatio="none" style="overflow:visible;display:block">'+
     '<defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#12A150" stop-opacity=".18"/><stop offset="1" stop-color="#12A150" stop-opacity="0"/></linearGradient></defs>'+
     '<path d="'+area+'" fill="url(#cg)"/>'+
     '<path d="'+d+'" fill="none" stroke="#12A150" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+
+    '<line id="cx" x1="0" y1="'+pad+'" x2="0" y2="'+(H-pad)+'" stroke="#12A150" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>'+
+    '<circle id="cdot" r="5" fill="#12A150" stroke="#fff" stroke-width="2" opacity="0"/>'+
     '<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="4.5" fill="#12A150"/>'+
     '</svg>'+
-    '<div style="text-align:right;font-size:12px;color:var(--muted);margin-top:6px">latest <b style="color:var(--ink)">'+lbl+'</b> \u00b7 '+n+' nights</div>';
+    '<div id="ctip" style="position:absolute;top:0;left:0;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:9px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .1s;box-shadow:0 4px 12px rgba(0,0,0,.2)">x</div>'+
+    '</div>'+
+    '<div id="cfoot" style="text-align:right;font-size:12px;color:var(--muted);margin-top:6px">latest <b style="color:var(--ink)">'+fmtV(lastV)+'</b> \u00b7 '+n+' nights</div>';
+
+  const wrap=$("#chartWrap"), svg=$("#chartSvg"), dot=$("#cdot"), xl=$("#cx"), tip=$("#ctip"), foot=$("#cfoot");
+  function show(clientX){
+    const r=svg.getBoundingClientRect();
+    let rel=(clientX-r.left)/r.width;
+    rel=Math.max(0,Math.min(1,rel));
+    const i=Math.round(rel*(n-1));
+    const px=X(i), py=Y(vals[i]);
+    dot.setAttribute("cx",px); dot.setAttribute("cy",py); dot.setAttribute("opacity","1");
+    xl.setAttribute("x1",px); xl.setAttribute("x2",px); xl.setAttribute("opacity",".6");
+    const leftPx=(px/W)*r.width;
+    const topPx=(py/152)*r.height;
+    tip.style.opacity="1";
+    tip.innerHTML=fmtDate(nights[i].shift_date)+" \u00b7 <b>"+fmtV(vals[i])+"</b>";
+    tip.style.left=Math.max(4,Math.min(r.width-4,leftPx))+"px";
+    tip.style.top=Math.max(0,topPx-34)+"px";
+    tip.style.transform="translateX(-50%)";
+    if(foot) foot.style.opacity="0";
+  }
+  function hide(){ dot.setAttribute("opacity","0"); xl.setAttribute("opacity","0"); tip.style.opacity="0"; if(foot) foot.style.opacity="1"; }
+  wrap.addEventListener("pointerdown",e=>{ wrap.setPointerCapture(e.pointerId); show(e.clientX); });
+  wrap.addEventListener("pointermove",e=>{ if(e.pressure>0||e.buttons>0||e.pointerType==="touch") show(e.clientX); });
+  wrap.addEventListener("pointerup",hide);
+  wrap.addEventListener("pointercancel",hide);
+  wrap.addEventListener("pointerleave",hide);
 }
 document.querySelectorAll(".ctab").forEach(b=>b.onclick=()=>{ chartMetric=b.dataset.m; document.querySelectorAll(".ctab").forEach(x=>x.classList.toggle("on",x===b)); renderChart(); });
 
@@ -696,4 +726,3 @@ window.addEventListener("pagehide",()=>{ if(live) persistLiveNow(); });
 </script>
 </body>
 </html>
-
