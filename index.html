@@ -119,6 +119,14 @@
   .tny-time{font-weight:700;font-size:22px;color:var(--gold);margin-top:2px;font-variant-numeric:tabular-nums}
   .tny-btn{flex:0 0 auto;border:1px solid var(--gold);background:none;color:var(--gold);border-radius:9px;padding:11px 14px;font-weight:700;font-size:13px}
   .tny-btn.on{background:var(--gold);color:#fff}
+  .clockout-row{display:flex;align-items:center;gap:8px;margin:12px 0 2px}
+  .co-lab{font-size:12px;color:var(--muted);text-align:center;flex:1}
+  .co-adj{flex:0 0 auto;min-width:44px;background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:9px;font-weight:700;font-size:13px;padding:8px 0}
+  .co-adj:active{border-color:var(--emerald);color:var(--emerald)}
+  .co-set{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:9px;padding:8px 13px;font-weight:600;font-size:12.5px}
+  .co-live{flex:0 0 auto;border:1px solid var(--emerald);background:none;color:var(--emerald);border-radius:9px;padding:8px 11px;font-weight:600;font-size:12px}
+  .tny-edit{display:flex;align-items:center;gap:8px;margin-top:9px}
+  .tny-reset{flex:0 0 auto;border:1px solid var(--clay);background:none;color:var(--clay);border-radius:9px;padding:8px 11px;font-weight:600;font-size:12px}
 
   .editor{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;margin:8px 0;box-shadow:var(--shadow)}
   .erow{display:flex;gap:10px;margin-bottom:13px}
@@ -302,13 +310,16 @@ async function localSave(arr){ try{ await window.storage.set(LKEY, JSON.stringif
 async function dataUpsert(s){
   if (CLOUD){
     const row = {user_id:user.id, shift_date:s.shift_date, boxes:s.boxes, hours:(s.hours||null), tourney_hours:s.tourney_hours, tourney_tips:(s.tourney_tips||0), no_op:!!s.no_op, received:s.received};
-    if (s.id && !s._new){ await sb.from("shifts").update(row).eq("id", s.id); }
-    else { await sb.from("shifts").insert(row); }
-    return;
+    let resp;
+    if (s.id && !s._new){ resp = await sb.from("shifts").update(row).eq("id", s.id); }
+    else { resp = await sb.from("shifts").insert(row); }
+    if(resp && resp.error){ console.warn(resp.error); return {error:resp.error}; }
+    return {ok:true};
   }
   const i = DATA.findIndex(x=>x.id===s.id);
   if(i>=0) DATA[i]=s; else DATA.push(s);
   await localSave(DATA);
+  return {ok:true};
 }
 async function dataDelete(id){
   if (CLOUD){ await sb.from("shifts").delete().eq("id", id); return; }
@@ -425,13 +436,13 @@ function renderChart(){
   const wrap=$("#chartWrap"), svg=$("#chartSvg"), dot=$("#cdot"), xl=$("#cx"), tip=$("#ctip"), foot=$("#cfoot");
   function show(clientX){
     const r=svg.getBoundingClientRect();
-    let rel=(clientX-r.left)/r.width;
+    let rel=(clientX-r.left)/r.width;               // 0..1 across the drawn area
     rel=Math.max(0,Math.min(1,rel));
     const i=Math.round(rel*(n-1));
-    const px=X(i), py=Y(vals[i]);
+    const px=X(i), py=Y(vals[i]);                    // svg viewBox coords
     dot.setAttribute("cx",px); dot.setAttribute("cy",py); dot.setAttribute("opacity","1");
     xl.setAttribute("x1",px); xl.setAttribute("x2",px); xl.setAttribute("opacity",".6");
-    const leftPx=(px/W)*r.width;
+    const leftPx=(px/W)*r.width;                     // to CSS px inside wrap
     const topPx=(py/152)*r.height;
     tip.style.opacity="1";
     tip.innerHTML=fmtDate(nights[i].shift_date)+" \u00b7 <b>"+fmtV(vals[i])+"</b>";
@@ -522,8 +533,15 @@ function refreshPrev(){
   const sb2=$("#saveB"); if(sb2) sb2.disabled = (e.boxes.length===0 && !c.tHrs && !c.tTips);
 }
 async function commit(){
-  const e=editing; const wasNew=e._new; delete e._new;
-  await dataUpsert(Object.assign({}, e, {_new:wasNew}));
+  const e=editing; const wasNew=e._new;
+  const sb2=$("#saveB");
+  const res=await dataUpsert(Object.assign({}, e, {_new:wasNew}));
+  if(res && res.error){
+    if(sb2){ sb2.textContent="Save failed - tap to retry"; sb2.disabled=false; sb2.style.background="var(--clay)"; }
+    alert("Couldn't save this night: "+(res.error.message||"database error")+"\n\nYour entry is still here - fix the issue and tap save again.");
+    return;
+  }
+  delete e._new;
   if(CLOUD){ DATA = (await dataList())||[]; }
   else { const i=DATA.findIndex(x=>x.id===e.id); if(i>=0)DATA[i]=e; else DATA.push(e); }
   DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
@@ -602,20 +620,27 @@ function setSegTip(i,v){ if(live&&live.segs[i]) live.segs[i].tips=v; persistLive
 function adjustSegTime(i,dm){ if(!live||!live.segs[i])return; live.segs[i].t+=dm*60000; if(i===0) live.start+=dm*60000; persistLiveNow(); renderLive(); }
 function toggleTourney(){
   if(!live) return;
-  if(live.tOn){ live.tHrs=(live.tHrs||0)+(Date.now()-live.tOn)/3600000; live.tOn=null; }
+  if(live.tOn){ live.tHrs=(live.tHrs||0)+(liveEnd()-live.tOn)/3600000; live.tOn=null; }
   else { live.tOn=Date.now(); }
   persistLiveNow(); renderLive();
 }
-function tourneyHrs(){ return (live.tHrs||0) + (live.tOn ? (Date.now()-live.tOn)/3600000 : 0); }
+function liveEnd(){ return (live&&live.endAt) ? live.endAt : Date.now(); }
+function tourneyHrs(){ return (live.tHrs||0) + (live.tOn ? (liveEnd()-live.tOn)/3600000 : 0); }
 function tourneyHrsPaid(){ return Math.round(tourneyHrs()); }
 function toggleLiveOp(){ if(!live)return; live.noOp=!live.noOp; persistLiveNow(); renderLive(); }
+function adjustTourney(dm){ if(!live||live.tOn)return; live.tHrs=Math.max(0,(live.tHrs||0)+dm/60); persistLiveNow(); renderLive(); }
+function resetTourney(){ if(!live)return; live.tHrs=0; live.tOn=null; persistLiveNow(); renderLive(); }
+function fixClockOut(){ if(!live)return; live.endAt=Date.now(); persistLiveNow(); renderLive(); }
+function clearClockOut(){ if(!live)return; live.endAt=null; persistLiveNow(); startLiveClock(); renderLive(); }
+function adjustClockOut(dm){ if(!live)return; if(!live.endAt) live.endAt=Date.now(); live.endAt=Math.max(live.start, live.endAt+dm*60000); persistLiveNow(); renderLive(); }
 async function cancelShift(){ live=null; clearTimeout(liveSaveTimer); if(CLOUD){ await cloudSaveLive(); } else { localPersist(); } stopLiveClock(); renderLive(); }
 function startLiveClock(){ stopLiveClock(); liveInt=setInterval(()=>{
   if(!live) return;
-  const el=$("#elapsed"); if(el) el.textContent=fmtDur(Date.now()-live.start);
+  if(live.endAt) return;               // frozen after clock-out; nothing to tick
+  const el=$("#elapsed"); if(el) el.textContent=fmtDur(liveEnd()-live.start);
   const te=$("#tElapsed"); if(te) te.textContent=fmtDur(tourneyHrs()*3600000);
   const tp=$("#tPaidNote"); if(tp) tp.textContent="counts as "+tourneyHrsPaid()+" hr \u00b7 "+money(tourneyHrsPaid()*TOURNEY_RATE);
-  const lh=$("#liveHr"); if(lh){ const bxg=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0)); const nn=bxg.length; const gt=bxg.reduce((a,b)=>a+b,0); const eh=Math.max(0,(Date.now()-live.start)/3600000); const fh=Math.max(0,eh-tourneyHrsPaid()); const orr=live.noOp?0:OP_CHARGE; const sf=Math.max(gt-orr*nn, FLOOR*fh)+tourneyHrsPaid()*TOURNEY_RATE+(parseFloat(live.tTips)||0); lh.textContent=money(eh?sf/eh:0)+"/hr"; }
+  const lh=$("#liveHr"); if(lh){ const bxg=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0)); const nn=bxg.length; const gt=bxg.reduce((a,b)=>a+b,0); const eh=Math.max(0,(liveEnd()-live.start)/3600000); const fh=Math.max(0,eh-tourneyHrsPaid()); const orr=live.noOp?0:OP_CHARGE; const sf=Math.max(gt-orr*nn, FLOOR*fh)+tourneyHrsPaid()*TOURNEY_RATE+(parseFloat(live.tTips)||0); lh.textContent=money(eh?sf/eh:0)+"/hr"; }
 },10000); }
 function stopLiveClock(){ if(liveInt){clearInterval(liveInt); liveInt=null;} }
 function liveGroups(){
@@ -624,12 +649,18 @@ function liveGroups(){
   return g;
 }
 async function endShift(){
-  const end=Date.now();
+  const end=liveEnd();
   if(live.tOn){ live.tHrs=(live.tHrs||0)+(end-live.tOn)/3600000; live.tOn=null; }
   const hours=Math.round(Math.max(0,(end-live.start)/3600000)*100)/100;
   const boxes=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0));
   const shift={id:uid(), shift_date:todayISO(), boxes, hours, tourney_hours:Math.round(live.tHrs||0), tourney_tips:(parseFloat(live.tTips)||0), no_op:!!live.noOp, received:false, _new:true};
-  await dataUpsert(shift);
+  const res=await dataUpsert(shift);
+  if(res && res.error){
+    if(live.tOn===null){} // tourney already closed above; leave live intact
+    alert("Couldn't save your shift: "+(res.error.message||"database error")+"\n\nYour shift is still running and nothing was lost. Try End shift again.");
+    persistLiveNow();
+    return;
+  }
   if(CLOUD){ DATA=(await dataList())||[]; } else { DATA.push(shift); }
   DATA.sort((a,b)=>b.shift_date.localeCompare(a.shift_date));
   live=null; clearTimeout(liveSaveTimer);
@@ -650,16 +681,26 @@ function renderLive(){
   const tHrsNow=tourneyHrs();
   const tPaid=tourneyHrsPaid();
   const tPay=tPaid*TOURNEY_RATE + (parseFloat(live.tTips)||0);
-  const elapsedHrs=Math.max(0,(Date.now()-live.start)/3600000);
+  const ended=!!live.endAt;
+  const elapsedHrs=Math.max(0,(liveEnd()-live.start)/3600000);
   const floorHrsLive=Math.max(0, elapsedHrs - tPaid);
   const opRate=live.noOp?0:OP_CHARGE;
   const soFar=Math.max(grossT-opRate*n, FLOOR*floorHrsLive)+tPay;
   const liveHourly=elapsedHrs?soFar/elapsedHrs:0;
   m.innerHTML=
    '<div class="live">'+
-     '<div class="live-lab">\u25cf shift running</div>'+
-     '<div class="live-time"><span id="elapsed">'+fmtDur(Date.now()-live.start)+'</span></div>'+
+     '<div class="live-lab">'+(ended?"\u23f8 clocked out":"\u25cf shift running")+'</div>'+
+     '<div class="live-time"><span id="elapsed">'+fmtDur(liveEnd()-live.start)+'</span></div>'+
      '<div class="live-sub">started '+fmtClock(live.start)+' \u00b7 '+n+' '+(n===1?"box":"boxes")+' \u00b7 '+money(soFar)+' so far \u00b7 <span id="liveHr" style="color:var(--emerald);font-weight:700">'+money(liveHourly)+'/hr</span></div>'+
+     '<div class="clockout-row">'+
+       (ended
+         ? '<button class="co-adj" data-coadj="-5">\u22125</button>'+
+           '<span class="co-lab">clocked out '+fmtClock(live.endAt)+'</span>'+
+           '<button class="co-adj" data-coadj="5">+5</button>'+
+           '<button class="co-live" id="coLive">\u21ba live</button>'
+         : '<span class="co-lab" style="flex:1">forgot to clock out? set your real end time \u2192</span>'+
+           '<button class="co-set" id="coSet">Fix clock-out</button>')+
+     '</div>'+
      '<div class="live-boxes">'+
        groups.map((seg,gi)=>
          '<div class="lbox">'+
@@ -693,6 +734,7 @@ function renderLive(){
            '<div id="tPaidNote" style="font-size:11px;color:var(--muted);margin-top:1px">counts as '+tPaid+' hr \u00b7 '+money(tPaid*TOURNEY_RATE)+'</div></div>'+
          '<button class="tny-btn '+(live.tOn?"on":"")+'" id="tnyToggle">'+(live.tOn?"\u25a0 Stop":(tHrsNow>0?"\u25b6 Resume":"\u25b6 Start tourney"))+'</button>'+
        '</div>'+
+       ((tHrsNow>0&&!live.tOn)?'<div class="tny-edit"><button class="co-adj" data-tadj="-5">\u22125</button><span style="flex:1;text-align:center;font-size:11.5px;color:var(--muted)">fix tourney time</span><button class="co-adj" data-tadj="5">+5</button><button class="tny-reset" id="tnyReset">Reset</button></div>':'')+
        ((tHrsNow>0||live.tOn)?'<input class="lseg-tip" id="ltTips" inputmode="decimal" placeholder="tourney tips $" value="'+(live.tTips||"")+'" style="width:100%;margin-top:9px">':'')+
      '</div>'+
      '<button class="lb-end" id="endShift">End shift &amp; save</button>'+
@@ -702,6 +744,11 @@ function renderLive(){
   $("#punchBtb").onclick=()=>addSeg(true);
   $("#opToggle").onclick=toggleLiveOp;
   $("#tnyToggle").onclick=toggleTourney;
+  { const b=$("#coSet"); if(b) b.onclick=fixClockOut; }
+  { const b=$("#coLive"); if(b) b.onclick=clearClockOut; }
+  { const b=$("#tnyReset"); if(b) b.onclick=resetTourney; }
+  m.querySelectorAll(".co-adj[data-coadj]").forEach(b=>b.onclick=e=>adjustClockOut(+e.currentTarget.dataset.coadj));
+  m.querySelectorAll(".co-adj[data-tadj]").forEach(b=>b.onclick=e=>adjustTourney(+e.currentTarget.dataset.tadj));
   const tt=$("#ltTips"); if(tt){ tt.oninput=e=>{live.tTips=e.target.value; persistLive();}; tt.onchange=e=>{live.tTips=e.target.value; persistLiveNow(); renderLive();}; }
   $("#endShift").onclick=endShift;
   $("#cancelShift").onclick=()=>{ if(window.confirm("Cancel this shift? Nothing will be saved.")) cancelShift(); };
