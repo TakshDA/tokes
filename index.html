@@ -142,7 +142,9 @@
   .tny-btn{flex:0 0 auto;border:1px solid var(--gold);background:none;color:var(--gold);border-radius:9px;padding:11px 14px;font-weight:700;font-size:13px}
   .tny-btn.on{background:var(--gold);color:#fff}
   .clockout-row{display:flex;align-items:center;gap:8px;margin:12px 0 2px}
-  .co-lab{font-size:12px;color:var(--muted);text-align:center;flex:1}
+  .co-lab{font-size:12px;color:var(--muted);flex:0 0 auto}
+  .co-time{flex:1;min-width:0;background:var(--bg);border:1px solid var(--emerald);border-radius:9px;color:var(--ink);font-size:16px;font-weight:700;padding:9px 11px;outline:none;text-align:center;font-family:inherit}
+  .co-time:focus{box-shadow:0 0 0 3px var(--emerald-soft)}
   .co-adj{flex:0 0 auto;min-width:44px;background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:9px;font-weight:700;font-size:13px;padding:8px 0}
   .co-adj:active{border-color:var(--emerald);color:var(--emerald)}
   .co-set{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:9px;padding:8px 13px;font-weight:600;font-size:12.5px}
@@ -315,12 +317,17 @@ if(window.matchMedia){ try{ window.matchMedia("(prefers-color-scheme: dark)").ad
 
 function calc(s){
   const boxes = s.boxes || [];
+  const promos = s.promos || [];
   const nBox = boxes.length;
+  // per box, count whichever is higher: your tip or the promo
+  const effBoxes = boxes.map((t,i)=>Math.max(Number(t)||0, Number(promos[i]||0)));
+  const promoWon = boxes.map((t,i)=>(Number(promos[i]||0) > (Number(t)||0)));
+  const promoTotal = effBoxes.reduce((a,b)=>a+b,0) - boxes.reduce((a,b)=>a+(Number(b)||0),0); // extra $ from promos winning
   const hasHours = !!(s.hours && Number(s.hours)>0);
   const lump = hasHours && nBox<=1 && Number(s.hours)>=3;
   const effortN = lump ? Number(s.hours) : nBox;
-  const gross = boxes.reduce((a,b)=>a+b,0);
-  const opCharge = (s.no_op ? 0 : OP_CHARGE) * effortN;
+  const gross = effBoxes.reduce((a,b)=>a+b,0);          // higher-of per box, summed
+  const opCharge = (s.no_op ? 0 : OP_CHARGE) * effortN; // $5/box off the higher value
   const tips = gross - opCharge;
   const clockHours = hasHours ? Number(s.hours) : nBox * HOURS_PER_BOX;
   const tHrs = Number(s.tourney_hours||0);
@@ -333,7 +340,7 @@ function calc(s){
   const tPay = tFlat + tTips;
   const total = boxPay + tPay;
   const hourly = clockHours ? total / clockHours : 0;
-  return {nBox, effortN, gross, opCharge, tips, floor, boxPay, topup, clockHours, hourly, tHrs, tFlat, tTips, tPay, total, lump};
+  return {nBox, effortN, gross, opCharge, tips, floor, boxPay, topup, clockHours, hourly, tHrs, tFlat, tTips, tPay, total, lump, effBoxes, promoWon, promoTotal};
 }
 
 const money = n => "$"+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -348,7 +355,7 @@ async function dataList(){
   if (CLOUD){
     const { data, error } = await sb.from("shifts").select("*").order("shift_date",{ascending:false});
     if (error){ console.warn(error); return []; }
-    return data.map(r=>({id:r.id, shift_date:r.shift_date, boxes:r.boxes||[], hours:(r.hours!=null?Number(r.hours):null), tourney_hours:Number(r.tourney_hours||0), tourney_tips:Number(r.tourney_tips||0), no_op:!!r.no_op, received:!!r.received}));
+    return data.map(r=>({id:r.id, shift_date:r.shift_date, boxes:r.boxes||[], promos:r.promos||[], hours:(r.hours!=null?Number(r.hours):null), tourney_hours:Number(r.tourney_hours||0), tourney_tips:Number(r.tourney_tips||0), no_op:!!r.no_op, received:!!r.received}));
   }
   try{ const r = await window.storage.get(LKEY); if(r&&r.value) return JSON.parse(r.value); }catch(e){}
   return null;
@@ -356,7 +363,7 @@ async function dataList(){
 async function localSave(arr){ try{ await window.storage.set(LKEY, JSON.stringify(arr)); }catch(e){} }
 async function dataUpsert(s){
   if (CLOUD){
-    const row = {user_id:user.id, shift_date:s.shift_date, boxes:s.boxes, hours:(s.hours||null), tourney_hours:s.tourney_hours, tourney_tips:(s.tourney_tips||0), no_op:!!s.no_op, received:s.received};
+    const row = {user_id:user.id, shift_date:s.shift_date, boxes:s.boxes, promos:(s.promos||[]), hours:(s.hours||null), tourney_hours:s.tourney_hours, tourney_tips:(s.tourney_tips||0), no_op:!!s.no_op, received:s.received};
     let resp;
     if (s.id && !s._new){ resp = await sb.from("shifts").update(row).eq("id", s.id); }
     else { resp = await sb.from("shifts").insert(row); }
@@ -512,7 +519,8 @@ document.querySelectorAll(".ctab").forEach(b=>b.onclick=()=>{ chartMetric=b.data
 $("#addCta").onclick = ()=> editing ? closeEditor() : openEditor(null);
 function openEditor(s){
   editing = s ? JSON.parse(JSON.stringify(s))
-              : {id:uid(),shift_date:todayISO(),boxes:[],tourney_hours:0,tourney_tips:0,no_op:false,received:false,_new:true};
+              : {id:uid(),shift_date:todayISO(),boxes:[],promos:[],tourney_hours:0,tourney_tips:0,no_op:false,received:false,_new:true};
+  if(!editing.promos) editing.promos=[];
   $("#addCta").textContent="Cancel"; $("#addCta").classList.add("x");
   renderEditor(); setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),60);
 }
@@ -527,12 +535,13 @@ function renderEditor(){
        '<div class="fld" style="width:96px"><label>Hours</label><input id="eHours" inputmode="decimal" placeholder="auto" value="'+(e.hours||"")+'"></div>'+
      '</div>'+
      '<div class="fld">'+
-       '<label>Tips per box (full amount, before the $5)</label>'+
+       '<label>Each box: your tip, and the promo (higher one counts)</label>'+
        '<div class="tiprow">'+
-         '<input id="tipIn" inputmode="decimal" placeholder="the full box, e.g. 27" autocomplete="off">'+
+         '<input id="tipIn" inputmode="decimal" placeholder="tip $" autocomplete="off">'+
+         '<input id="promoIn" inputmode="decimal" placeholder="promo $" autocomplete="off">'+
          '<button class="plus" id="tipAdd">+</button>'+
        '</div>'+
-       '<p class="hint">For a past night, type the total Hours. For tonight, use the green Punch-in tracker up top instead.</p>'+
+       '<p class="hint">Add one box at a time. Leave promo blank if none. For a past night, type the total Hours too.</p>'+
        '<div class="boxes" id="boxes">'+e.boxes.map((a,i)=>bxHTML(a,i)).join("")+'</div>'+
      '</div>'+
      '<div class="erow">'+
@@ -560,18 +569,26 @@ function renderEditor(){
   $("#eHours").oninput=ev=>{e.hours=parseFloat(ev.target.value)||null; refreshPrev();};
   $("#eTny").oninput=ev=>{e.tourney_hours=parseFloat(ev.target.value)||0; refreshPrev();};
   $("#eTnyTips").oninput=ev=>{e.tourney_tips=parseFloat(ev.target.value)||0; refreshPrev();};
-  $("#tipAdd").onclick=addTips;
-  $("#tipIn").addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();addTips();}});
+  $("#tipAdd").onclick=addBox;
+  $("#tipIn").addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();$("#promoIn").focus();}});
+  $("#promoIn").addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();addBox();}});
   $("#recvT").onclick=()=>{e.received=!e.received;renderEditor();setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),40);};
   $("#opT").onclick=()=>{e.no_op=!e.no_op;renderEditor();setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),40);};
   $("#saveB").onclick=commit;
-  $("#boxes").onclick=ev=>{const b=ev.target.closest("button[data-i]");if(b){e.boxes.splice(+b.dataset.i,1);renderEditor();$("#tipIn").focus();}};
+  $("#boxes").onclick=ev=>{const b=ev.target.closest("button[data-i]");if(b){const i=+b.dataset.i; e.boxes.splice(i,1); if(e.promos) e.promos.splice(i,1); renderEditor();$("#tipIn").focus();}};
 }
-function bxHTML(a,i){return '<span class="bx"><small>#'+(i+1)+'</small>$'+dnum(a)+'<button data-i="'+i+'" aria-label="remove">x</button></span>';}
-function addTips(){
-  const inp=$("#tipIn"); const parts=inp.value.replace(/[+,]/g," ").split(/\s+/).filter(Boolean); let ok=false;
-  parts.forEach(p=>{const v=parseFloat(p); if(!isNaN(v)&&v>0){editing.boxes.push(Math.round(v*100)/100);ok=true;}});
-  inp.value=""; if(ok)renderEditor(); setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),20);
+function bxHTML(a,i){
+  const e=editing||{}; const pr=(e.promos&&e.promos[i])?Number(e.promos[i]):0; const tp=Number(a)||0;
+  const won=pr>tp;
+  return '<span class="bx"><small>#'+(i+1)+'</small>$'+dnum(tp)+(pr>0?'<small style="color:var(--gold);margin-left:4px">promo $'+dnum(pr)+(won?' ✓':'')+'</small>':'')+'<button data-i="'+i+'" aria-label="remove">x</button></span>';
+}
+function addBox(){
+  const t=parseFloat($("#tipIn").value)||0, p=parseFloat($("#promoIn").value)||0;
+  if(t<=0 && p<=0){ $("#tipIn").focus(); return; }
+  editing.boxes.push(Math.round(t*100)/100);
+  if(!editing.promos) editing.promos=[];
+  editing.promos.push(Math.round(p*100)/100);
+  renderEditor(); setTimeout(()=>$("#tipIn")&&$("#tipIn").focus(),20);
 }
 function refreshPrev(){
   const e=editing,c=calc(e),p=$("#editorMount").querySelector(".epreview"); if(!p)return;
@@ -614,13 +631,14 @@ function receiptHTML(s){
   const c=calc(s), open=openId===s.id;
   const lines = c.lump
     ? '<div class="li"><span class="k">TIPS ('+dnum(c.clockHours)+' hr lump)</span><span class="dots"></span><span class="v">'+money(c.gross)+'</span></div>'
-    : s.boxes.map((a,i)=>'<div class="li"><span class="k">BOX '+String(i+1).padStart(2,"0")+'</span><span class="dots"></span><span class="v">'+money(a)+'</span></div>').join("");
+    : s.boxes.map((a,i)=>'<div class="li"><span class="k">BOX '+String(i+1).padStart(2,"0")+(c.promoWon&&c.promoWon[i]?' <small style="color:var(--gold)">promo</small>':'')+'</span><span class="dots"></span><span class="v">'+money(c.effBoxes?c.effBoxes[i]:a)+'</span></div>').join("");
   return ''+
   '<div class="receipt '+(open?"open":"")+'" data-id="'+s.id+'">'+
     '<div class="rhead"><span class="d">'+fmtDate(s.shift_date)+'</span>'+
       '<span class="st '+(s.received?"paid":"owed")+'">'+(s.received?"PAID":"OWED")+'</span></div>'+
     (lines||'<div class="li"><span class="k">no boxes</span><span class="dots"></span><span class="v"></span></div>')+
     (c.lump?'':'<div class="li sub"><span class="k">GROSS ('+c.effortN+' '+(c.effortN===1?"box":"boxes")+')</span><span class="dots"></span><span class="v">'+money(c.gross)+'</span></div>')+
+    (c.promoTotal>0?'<div class="li tny"><span class="k">incl. promo boost</span><span class="dots"></span><span class="v">+'+money(c.promoTotal)+'</span></div>':'')+
     (c.opCharge>0?'<div class="li house"><span class="k">OP CHARGE ('+c.effortN+'x$'+OP_CHARGE+')</span><span class="dots"></span><span class="v">-'+money(c.opCharge)+'</span></div>':'')+
     '<div class="li sub"><span class="k">NET TIPS</span><span class="dots"></span><span class="v">'+money(c.tips)+'</span></div>'+
     (c.topup>0?'<div class="li house"><span class="k">HOUSE FLOOR</span><span class="dots"></span><span class="v">+'+money(c.topup)+'</span></div>':'')+
@@ -662,10 +680,11 @@ function persistLive(){ if(CLOUD){ clearTimeout(liveSaveTimer); liveSaveTimer=se
 function persistLiveNow(){ clearTimeout(liveSaveTimer); if(CLOUD){ cloudSaveLive(); } else localPersist(); }
 function fmtDur(ms){ const m=Math.max(0,Math.floor(ms/60000)); return Math.floor(m/60)+"h "+String(m%60).padStart(2,"0")+"m"; }
 function fmtClock(ms){ return new Date(ms).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}); }
-function startShift(){ const now=Date.now(); live={start:now, segs:[{t:now, btb:false, tips:""}], tHrs:0, tOn:null, tTips:"", noOp:false}; persistLiveNow(); startLiveClock(); renderLive(); }
-function addSeg(btb){ if(!live)return; live.segs.push({t:Date.now(), btb:!!btb, tips:""}); persistLiveNow(); renderLive(); }
+function startShift(){ const now=Date.now(); live={start:now, segs:[{t:now, btb:false, tips:"", promo:""}], tHrs:0, tOn:null, tTips:"", noOp:false}; persistLiveNow(); startLiveClock(); renderLive(); }
+function addSeg(btb){ if(!live)return; live.segs.push({t:Date.now(), btb:!!btb, tips:"", promo:""}); persistLiveNow(); renderLive(); }
 function removeSeg(i){ live.segs.splice(i,1); if(live.segs.length) live.segs[0].btb=false; persistLiveNow(); renderLive(); if(!live.segs.length) cancelShift(); }
 function setSegTip(i,v){ if(live&&live.segs[i]) live.segs[i].tips=v; persistLive(); }
+function setSegPromo(i,v){ if(live&&live.segs[i]) live.segs[i].promo=v; persistLive(); }
 function adjustSegTime(i,dm){ if(!live||!live.segs[i])return; live.segs[i].t+=dm*60000; if(i===0) live.start+=dm*60000; persistLiveNow(); renderLive(); }
 function toggleTourney(){
   if(!live) return;
@@ -681,7 +700,15 @@ function adjustTourney(dm){ if(!live||live.tOn)return; live.tHrs=Math.max(0,(liv
 function resetTourney(){ if(!live)return; live.tHrs=0; live.tOn=null; persistLiveNow(); renderLive(); }
 function fixClockOut(){ if(!live)return; live.endAt=Date.now(); persistLiveNow(); renderLive(); }
 function clearClockOut(){ if(!live)return; live.endAt=null; persistLiveNow(); startLiveClock(); renderLive(); }
-function adjustClockOut(dm){ if(!live)return; if(!live.endAt) live.endAt=Date.now(); live.endAt=Math.max(live.start, live.endAt+dm*60000); persistLiveNow(); renderLive(); }
+function hhmm(ms){ const d=new Date(ms); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+function setClockOutTime(val){ // val = "HH:MM" from the time picker
+  if(!live||!val)return;
+  const [h,mi]=val.split(":").map(Number);
+  const base=new Date(live.start); base.setHours(h,mi,0,0);
+  let t=base.getTime();
+  if(t<live.start) t+=24*3600000;   // picked a time earlier than start = next day (overnight)
+  live.endAt=t; persistLiveNow(); renderLive();
+}
 async function cancelShift(){ live=null; clearTimeout(liveSaveTimer); if(CLOUD){ await cloudSaveLive(); } else { localPersist(); } stopLiveClock(); renderLive(); }
 function startLiveClock(){ stopLiveClock(); liveInt=setInterval(()=>{
   if(!live) return;
@@ -689,20 +716,25 @@ function startLiveClock(){ stopLiveClock(); liveInt=setInterval(()=>{
   const el=$("#elapsed"); if(el) el.textContent=fmtDur(liveEnd()-live.start);
   const te=$("#tElapsed"); if(te) te.textContent=fmtDur(tourneyHrs()*3600000);
   const tp=$("#tPaidNote"); if(tp) tp.textContent="counts as "+tourneyHrsPaid()+" hr \u00b7 "+money(tourneyHrsPaid()*TOURNEY_RATE);
-  const lh=$("#liveHr"); if(lh){ const bxg=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0)); const nn=bxg.length; const gt=bxg.reduce((a,b)=>a+b,0); const eh=Math.max(0,(liveEnd()-live.start)/3600000); const fh=Math.max(0,eh-tourneyHrsPaid()); const orr=live.noOp?0:OP_CHARGE; const sf=Math.max(gt-orr*nn, FLOOR*fh)+tourneyHrsPaid()*TOURNEY_RATE+(parseFloat(live.tTips)||0); lh.textContent=money(eh?sf/eh:0)+"/hr"; }
+  const lh=$("#liveHr"); if(lh){ const bxg=liveGroups().map(groupEff); const nn=bxg.length; const gt=bxg.reduce((a,b)=>a+b,0); const eh=Math.max(0,(liveEnd()-live.start)/3600000); const fh=Math.max(0,eh-tourneyHrsPaid()); const orr=live.noOp?0:OP_CHARGE; const sf=Math.max(gt-orr*nn, FLOOR*fh)+tourneyHrsPaid()*TOURNEY_RATE+(parseFloat(live.tTips)||0); lh.textContent=money(eh?sf/eh:0)+"/hr"; }
 },10000); }
 function stopLiveClock(){ if(liveInt){clearInterval(liveInt); liveInt=null;} }
 function liveGroups(){
-  const g=[]; live.segs.forEach((s,i)=>{ const seg={t:s.t,btb:s.btb,tips:s.tips,i};
+  const g=[]; live.segs.forEach((s,i)=>{ const seg={t:s.t,btb:s.btb,tips:s.tips,promo:s.promo,i};
     if(i===0 || !s.btb) g.push([seg]); else g[g.length-1].push(seg); });
   return g;
 }
+function groupTip(seg){ return seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0); }
+function groupPromo(seg){ return parseFloat(seg[0]&&seg[0].promo)||0; }
+function groupEff(seg){ return Math.max(groupTip(seg), groupPromo(seg)); }
 async function endShift(){
   const end=liveEnd();
   if(live.tOn){ live.tHrs=(live.tHrs||0)+(end-live.tOn)/3600000; live.tOn=null; }
   const hours=Math.round(Math.max(0,(end-live.start)/3600000)*100)/100;
-  const boxes=liveGroups().map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0));
-  const shift={id:uid(), shift_date:todayISO(), boxes, hours, tourney_hours:Math.round(live.tHrs||0), tourney_tips:(parseFloat(live.tTips)||0), no_op:!!live.noOp, received:false, _new:true};
+  const grps=liveGroups();
+  const boxes=grps.map(groupTip);
+  const promos=grps.map(groupPromo);
+  const shift={id:uid(), shift_date:todayISO(), boxes, promos, hours, tourney_hours:Math.round(live.tHrs||0), tourney_tips:(parseFloat(live.tTips)||0), no_op:!!live.noOp, received:false, _new:true};
   const res=await dataUpsert(shift);
   if(res && res.error){
     if(live.tOn===null){} // tourney already closed above; leave live intact
@@ -725,7 +757,7 @@ function renderLive(){
     return;
   }
   const groups=liveGroups();
-  const bx=groups.map(seg=>seg.reduce((a,s)=>a+(parseFloat(s.tips)||0),0));
+  const bx=groups.map(groupEff);
   const n=bx.length, grossT=bx.reduce((a,b)=>a+b,0);
   const tHrsNow=tourneyHrs();
   const tPaid=tourneyHrsPaid();
@@ -743,17 +775,17 @@ function renderLive(){
      '<div class="live-sub">started '+fmtClock(live.start)+' \u00b7 '+n+' '+(n===1?"box":"boxes")+' \u00b7 '+money(soFar)+' so far \u00b7 <span id="liveHr" style="color:var(--emerald);font-weight:700">'+money(liveHourly)+'/hr</span></div>'+
      '<div class="clockout-row">'+
        (ended
-         ? '<button class="co-adj" data-coadj="-5">\u22125</button>'+
-           '<span class="co-lab">clocked out '+fmtClock(live.endAt)+'</span>'+
-           '<button class="co-adj" data-coadj="5">+5</button>'+
+         ? '<span class="co-lab">clocked out at</span>'+
+           '<input type="time" id="coTime" class="co-time" value="'+hhmm(live.endAt)+'">'+
            '<button class="co-live" id="coLive">\u21ba live</button>'
          : '<span class="co-lab" style="flex:1">forgot to clock out? set your real end time \u2192</span>'+
-           '<button class="co-set" id="coSet">Fix clock-out</button>')+
+           '<button class="co-set" id="coSet">Set end time</button>')+
      '</div>'+
      '<div class="live-boxes">'+
-       groups.map((seg,gi)=>
-         '<div class="lbox">'+
-           '<div class="lbox-h">BOX '+(gi+1)+(seg.length>1?" \u00b7 "+seg.length+" tables (back to back)":"")+'</div>'+
+       groups.map((seg,gi)=>{
+         const gtip=groupTip(seg), gpromo=groupPromo(seg), promoWins=gpromo>gtip;
+         return '<div class="lbox">'+
+           '<div class="lbox-h">BOX '+(gi+1)+(seg.length>1?" \u00b7 "+seg.length+" tables (back to back)":"")+(promoWins?' <span style="color:var(--gold)">\u00b7 promo counts</span>':'')+'</div>'+
            seg.map(s=>
              '<div class="lseg">'+
              '<div class="lseg-time-row">'+
@@ -766,7 +798,9 @@ function renderLive(){
                '<button class="lseg-x" data-x="'+s.i+'" aria-label="remove">\u00d7</button>'+
              '</div>'+
              '</div>').join("")+
-         '</div>').join("")+
+           '<input class="lseg-tip promo-in" inputmode="decimal" placeholder="promo $ (if any)" value="'+(seg[0].promo||"")+'" data-pi="'+seg[0].i+'" style="width:100%;margin-top:8px">'+
+         '</div>';
+       }).join("")+
      '</div>'+
      '<div class="live-btns">'+
        '<button class="lb-new" id="punchNew">+ New box<br><small>after a break</small></button>'+
@@ -796,13 +830,14 @@ function renderLive(){
   { const b=$("#coSet"); if(b) b.onclick=fixClockOut; }
   { const b=$("#coLive"); if(b) b.onclick=clearClockOut; }
   { const b=$("#tnyReset"); if(b) b.onclick=resetTourney; }
-  m.querySelectorAll(".co-adj[data-coadj]").forEach(b=>b.onclick=e=>adjustClockOut(+e.currentTarget.dataset.coadj));
+  { const t=$("#coTime"); if(t){ t.onchange=e=>setClockOutTime(e.target.value); } }
   m.querySelectorAll(".co-adj[data-tadj]").forEach(b=>b.onclick=e=>adjustTourney(+e.currentTarget.dataset.tadj));
   const tt=$("#ltTips"); if(tt){ tt.oninput=e=>{live.tTips=e.target.value; persistLive();}; tt.onchange=e=>{live.tTips=e.target.value; persistLiveNow(); renderLive();}; }
   $("#endShift").onclick=endShift;
   $("#cancelShift").onclick=()=>{ if(window.confirm("Cancel this shift? Nothing will be saved.")) cancelShift(); };
   m.querySelectorAll(".lt-adj").forEach(b=>b.onclick=e=>adjustSegTime(+e.currentTarget.dataset.si, +e.currentTarget.dataset.adj));
   m.querySelectorAll(".lseg-tip[data-i]").forEach(inp=>{ inp.oninput=e=>setSegTip(+e.target.dataset.i, e.target.value); inp.onchange=e=>{ setSegTip(+e.target.dataset.i, e.target.value); persistLiveNow(); renderLive(); }; });
+  m.querySelectorAll(".promo-in[data-pi]").forEach(inp=>{ inp.oninput=e=>setSegPromo(+e.target.dataset.pi, e.target.value); inp.onchange=e=>{ setSegPromo(+e.target.dataset.pi, e.target.value); persistLiveNow(); renderLive(); }; });
   m.querySelectorAll(".lseg-x").forEach(b=>b.onclick=e=>removeSeg(+e.target.dataset.x));
 }
 
