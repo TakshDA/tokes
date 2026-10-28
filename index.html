@@ -701,6 +701,25 @@ function resetTourney(){ if(!live)return; live.tHrs=0; live.tOn=null; persistLiv
 function fixClockOut(){ if(!live)return; live.endAt=Date.now(); persistLiveNow(); renderLive(); }
 function clearClockOut(){ if(!live)return; live.endAt=null; persistLiveNow(); startLiveClock(); renderLive(); }
 function hhmm(ms){ const d=new Date(ms); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+function setClockInTime(val){ // val = "HH:MM" from the time picker
+  if(!live||!val)return;
+  const [h,mi]=val.split(":").map(Number);
+  const base=new Date(live.start); base.setHours(h,mi,0,0);
+  let t=base.getTime();
+  if(live.endAt && t>live.endAt) t=live.endAt;   // can't start after you ended
+  live.start=t;
+  if(live.segs[0]) live.segs[0].t=t;
+  persistLiveNow(); renderLive();
+}
+function setTourneyStart(val){ // "HH:MM" - back-date when the tourney actually started
+  if(!live||!live.tOn||!val)return;
+  const [h,mi]=val.split(":").map(Number);
+  const base=new Date(live.tOn); base.setHours(h,mi,0,0);
+  let t=base.getTime();
+  if(t<live.start) t=live.start;   // not before the shift started
+  const now=liveEnd(); if(t>now) t=now;  // not in the future
+  live.tOn=t; persistLiveNow(); renderLive();
+}
 function setClockOutTime(val){ // val = "HH:MM" from the time picker
   if(!live||!val)return;
   const [h,mi]=val.split(":").map(Number);
@@ -774,6 +793,10 @@ function renderLive(){
      '<div class="live-time"><span id="elapsed">'+fmtDur(liveEnd()-live.start)+'</span></div>'+
      '<div class="live-sub">started '+fmtClock(live.start)+' \u00b7 '+n+' '+(n===1?"box":"boxes")+' \u00b7 '+money(soFar)+' so far \u00b7 <span id="liveHr" style="color:var(--emerald);font-weight:700">'+money(liveHourly)+'/hr</span></div>'+
      '<div class="clockout-row">'+
+       '<span class="co-lab">clocked in at</span>'+
+       '<input type="time" id="ciTime" class="co-time" value="'+hhmm(live.start)+'">'+
+     '</div>'+
+     '<div class="clockout-row">'+
        (ended
          ? '<span class="co-lab">clocked out at</span>'+
            '<input type="time" id="coTime" class="co-time" value="'+hhmm(live.endAt)+'">'+
@@ -817,6 +840,7 @@ function renderLive(){
            '<div id="tPaidNote" style="font-size:11px;color:var(--muted);margin-top:1px">counts as '+tPaid+' hr \u00b7 '+money(tPaid*TOURNEY_RATE)+'</div></div>'+
          '<button class="tny-btn '+(live.tOn?"on":"")+'" id="tnyToggle">'+(live.tOn?"\u25a0 Stop":(tHrsNow>0?"\u25b6 Resume":"\u25b6 Start tourney"))+'</button>'+
        '</div>'+
+       (live.tOn?'<div class="tny-edit"><span class="co-lab">started at</span><input type="time" id="tnyStart" class="co-time" value="'+hhmm(live.tOn)+'"></div>':'')+
        ((tHrsNow>0&&!live.tOn)?'<div class="tny-edit"><button class="co-adj" data-tadj="-5">\u22125</button><span style="flex:1;text-align:center;font-size:11.5px;color:var(--muted)">fix tourney time</span><button class="co-adj" data-tadj="5">+5</button><button class="tny-reset" id="tnyReset">Reset</button></div>':'')+
        ((tHrsNow>0||live.tOn)?'<input class="lseg-tip" id="ltTips" inputmode="decimal" placeholder="tourney tips $" value="'+(live.tTips||"")+'" style="width:100%;margin-top:9px">':'')+
      '</div>'+
@@ -830,7 +854,9 @@ function renderLive(){
   { const b=$("#coSet"); if(b) b.onclick=fixClockOut; }
   { const b=$("#coLive"); if(b) b.onclick=clearClockOut; }
   { const b=$("#tnyReset"); if(b) b.onclick=resetTourney; }
+  { const t=$("#ciTime"); if(t){ t.onchange=e=>setClockInTime(e.target.value); } }
   { const t=$("#coTime"); if(t){ t.onchange=e=>setClockOutTime(e.target.value); } }
+  { const t=$("#tnyStart"); if(t){ t.onchange=e=>setTourneyStart(e.target.value); } }
   m.querySelectorAll(".co-adj[data-tadj]").forEach(b=>b.onclick=e=>adjustTourney(+e.currentTarget.dataset.tadj));
   const tt=$("#ltTips"); if(tt){ tt.oninput=e=>{live.tTips=e.target.value; persistLive();}; tt.onchange=e=>{live.tTips=e.target.value; persistLiveNow(); renderLive();}; }
   $("#endShift").onclick=endShift;
